@@ -1,0 +1,74 @@
+# gst-launch pipelines
+#
+# Each pipeline starts with a line "gst-launch-1.0" (optionally followed by flags),
+#   then the next line(s) contain(s) elements / bins.
+# Lines might use in (Nix) shell syntax (backslash (\) at end for multiline commands).
+# The pipeline is parsed until an empty line is encountered.
+# Lines starting with a pound (#) are considered comments and will be skipped.
+
+
+gst-launch-1.0 -e \
+    videotestsrc pattern=18 \
+    ! autovideosink
+
+gst-launch-1.0 -e \
+    videotestsrc pattern=18 \
+    ! "video/x-raw,width=960,height=540" \
+    ! videoscale \
+    ! "video/x-raw,width=640,height=360" \
+    ! coloreffects preset=4 \
+    ! ximagesink
+
+gst-launch-1.0 -e \
+    videotestsrc pattern=18 flip=1 \
+    ! "video/x-raw,width=960,height=540" \
+    ! tee name=t0 \
+        ! queue \
+        ! videoscale \
+        ! "video/x-raw,width=640,height=360" \
+        ! coloreffects preset=1 \
+        ! ximagesink \
+    t0. \
+        ! queue \
+        ! videoscale \
+        ! "video/x-raw,width=480,height=270" \
+        ! coloreffects preset=0 \
+        ! ximagesink
+
+gst-launch-1.0 -e \
+    videotestsrc pattern=18 flip=1 \
+    ! "video/x-raw,width=960,height=540" \
+    ! tee name=t \
+        ! queue \
+        ! videoscale \
+        ! "video/x-raw,width=640,height=360" \
+        ! coloreffects preset=1 \
+        ! videoflip video-direction=0 \
+        ! comp.sink_0 \
+    t. \
+        ! queue \
+        ! videoscale \
+        ! "video/x-raw,width=640,height=360" \
+        ! coloreffects preset=0 \
+        ! videoflip video-direction=horiz \
+        ! comp.sink_1 \
+    t. \
+        ! queue \
+        ! videoscale \
+        ! "video/x-raw,width=640,height=360" \
+        ! coloreffects preset=3 \
+        ! videoflip video-direction=vert \
+        ! comp.sink_2 \
+    t. \
+        ! queue \
+        ! videoscale \
+        ! "video/x-raw,width=640,height=360" \
+        ! coloreffects preset=4 \
+        ! videoflip video-direction=180 \
+        ! comp.sink_3 \
+    compositor name=comp \
+            sink_0::xpos=0 sink_0::ypos=0 \
+            sink_1::xpos=640 sink_1::ypos=0 \
+            sink_2::xpos=0 sink_2::ypos=360 \
+            sink_3::xpos=640 sink_3::ypos=360 \
+    ! ximagesink

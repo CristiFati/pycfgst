@@ -1,0 +1,7 @@
+# Properties to be ignored as a list per factory class
+#   combined with global ones (per all classes: *)
+# All properties can also be specified using *
+
+"*":  # Ignore for all classes
+    - parent
+
