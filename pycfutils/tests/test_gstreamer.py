@@ -53,11 +53,11 @@ class GStreamerTestCase(_GStreamerBaseTestCase):
 
     @classmethod
     def generate_pipeline(cls, command):
-        return Gst.parse_launch(command)
+        return Gst.parse_launch(cls.normalize_command(command))
 
     @classmethod
     def normalize_command(cls, command):
-        return command
+        return command.replace('"', "")
 
     @classmethod
     def read_pipelines(cls):
@@ -97,6 +97,30 @@ class GStreamerTestCase(_GStreamerBaseTestCase):
             ra = RegistryAccess()
             self.assertIsInstance(ra.contents(), dict)
 
+    def compare_pipeline_strings(self, input, output):  # Lame
+        inls = tuple(e.strip() for e in input.split("!"))
+        outls = output.split("\n")
+        start = 0
+        while start < len(outls) and not outls[start].strip():
+            start += 1
+        start += 1
+        outls = tuple(e.strip() for e in "\n".join(outls[start:]).split("!"))
+        if len(inls) != len(outls):
+            print(f"Element count mismatch: {len(inls) != len(outls)}")
+            return False
+        for idx, inl in enumerate(inls):
+            i = inl.find(",")
+            i = inl.find(" ") if i == -1 else i
+            ine = inl if i == -1 else inl[:i].strip('"')
+            outl = outls[idx]
+            i = outl.find(",")
+            i = outl.find(" ") if i == -1 else i
+            oute = outl if i == -1 else outl[:i].strip('"')
+            if not ine or not oute or ine != oute:
+                print(f"Element ({idx}) mismatch: '{ine}' != '{oute}'")
+                return False
+        return True
+
     def test_pipeline_parser(self):
         global PipelineParser
         if pcfgst is None:
@@ -109,8 +133,9 @@ class GStreamerTestCase(_GStreamerBaseTestCase):
 
             pparser = PipelineParser()
             pipeline_strings = tuple(self.read_pipelines())
-            for idx, pipeline_string in enumerate(pipeline_strings[:2]):
-                print(f"----- Pipeline {idx}:\n--- Input:\n{pipeline_string}\n")
+            for idx, pipeline_string in enumerate(pipeline_strings):
+                # print(f"----- Pipeline {idx}:\n--- Input:\n{pipeline_string}\n")
                 pipeline = self.generate_pipeline(pipeline_string)
                 output = pparser.gst_launch(pipeline)
-                print(f"--- Output:\n{output}\n")
+                # print(f"--- Output:\n{output}\n")
+                self.assertTrue(self.compare_pipeline_strings(pipeline_string, output))

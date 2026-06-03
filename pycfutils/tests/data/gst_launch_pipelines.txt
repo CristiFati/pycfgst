@@ -7,68 +7,116 @@
 # Lines starting with a pound (#) are considered comments and will be skipped.
 
 
+# Dummy
 gst-launch-1.0 -e \
-    videotestsrc pattern=18 \
-    ! autovideosink
+  videotestsrc pattern=18 \
+  ! autovideosink
 
+# Simple, linear
 gst-launch-1.0 -e \
-    videotestsrc pattern=18 \
-    ! "video/x-raw,width=960,height=540" \
+  videotestsrc pattern=18 \
+  ! "video/x-raw,width=960,height=540" \
+  ! videoscale \
+  ! "video/x-raw,width=640,height=360" \
+  ! coloreffects preset=4 \
+  ! ximagesink
+
+# Branch (2)
+gst-launch-1.0 -e \
+  videotestsrc pattern=18 flip=1 \
+  ! "video/x-raw,width=960,height=540" \
+  ! tee name=t0 \
+    ! queue \
+    ! videoscale \
+    ! "video/x-raw,width=640,height=360" \
+    ! coloreffects preset=1 \
+    ! ximagesink \
+  t0. \
+    ! queue \
+    ! videoscale \
+    ! "video/x-raw,width=480,height=270" \
+    ! coloreffects preset=0 \
+    ! ximagesink
+
+# Branch (4) + merge
+gst-launch-1.0 -e \
+  videotestsrc pattern=18 flip=1 \
+  ! "video/x-raw,width=960,height=540" \
+  ! tee name=t0 \
+    ! queue \
+    ! videoscale \
+    ! "video/x-raw,width=640,height=360" \
+    ! coloreffects preset=1 \
+    ! videoflip video-direction=0 \
+    ! comp0.sink_0 \
+  t0. \
+    ! queue \
+    ! videoscale \
+    ! "video/x-raw,width=640,height=360" \
+    ! coloreffects preset=0 \
+    ! videoflip video-direction=horiz \
+    ! comp0.sink_1 \
+  t0. \
+    ! queue \
+    ! videoscale \
+    ! "video/x-raw,width=640,height=360" \
+    ! coloreffects preset=3 \
+    ! videoflip video-direction=vert \
+    ! comp0.sink_2 \
+  t0. \
+    ! queue \
     ! videoscale \
     ! "video/x-raw,width=640,height=360" \
     ! coloreffects preset=4 \
-    ! ximagesink
+    ! videoflip video-direction=180 \
+    ! comp0.sink_3 \
+  compositor name=comp0 \
+      sink_0::xpos=0 sink_0::ypos=0 \
+      sink_1::xpos=640 sink_1::ypos=0 \
+      sink_2::xpos=0 sink_2::ypos=360 \
+      sink_3::xpos=640 sink_3::ypos=360 \
+  ! ximagesink
 
+# Branch (3 + 2 inner) + merges
 gst-launch-1.0 -e \
-    videotestsrc pattern=18 flip=1 \
-    ! "video/x-raw,width=960,height=540" \
-    ! tee name=t0 \
-        ! queue \
-        ! videoscale \
-        ! "video/x-raw,width=640,height=360" \
-        ! coloreffects preset=1 \
-        ! ximagesink \
-    t0. \
-        ! queue \
-        ! videoscale \
-        ! "video/x-raw,width=480,height=270" \
-        ! coloreffects preset=0 \
-        ! ximagesink
-
-gst-launch-1.0 -e \
-    videotestsrc pattern=18 flip=1 \
-    ! "video/x-raw,width=960,height=540" \
-    ! tee name=t \
-        ! queue \
-        ! videoscale \
-        ! "video/x-raw,width=640,height=360" \
-        ! coloreffects preset=1 \
-        ! videoflip video-direction=0 \
-        ! comp.sink_0 \
-    t. \
-        ! queue \
-        ! videoscale \
-        ! "video/x-raw,width=640,height=360" \
-        ! coloreffects preset=0 \
-        ! videoflip video-direction=horiz \
-        ! comp.sink_1 \
-    t. \
-        ! queue \
-        ! videoscale \
-        ! "video/x-raw,width=640,height=360" \
-        ! coloreffects preset=3 \
-        ! videoflip video-direction=vert \
-        ! comp.sink_2 \
-    t. \
-        ! queue \
-        ! videoscale \
-        ! "video/x-raw,width=640,height=360" \
-        ! coloreffects preset=4 \
-        ! videoflip video-direction=180 \
-        ! comp.sink_3 \
-    compositor name=comp \
-            sink_0::xpos=0 sink_0::ypos=0 \
-            sink_1::xpos=640 sink_1::ypos=0 \
-            sink_2::xpos=0 sink_2::ypos=360 \
-            sink_3::xpos=640 sink_3::ypos=360 \
-    ! ximagesink
+  videotestsrc pattern=18 flip=1 \
+  ! "video/x-raw,width=960,height=540" \
+  ! tee name=t0 \
+    ! queue \
+    ! videoscale \
+    ! "video/x-raw,width=640,height=360" \
+    ! coloreffects preset=1 \
+    ! videoflip video-direction=0 \
+    ! comp0.sink_0 \
+  t0. \
+    ! queue \
+    ! videoscale \
+    ! "video/x-raw,width=640,height=360" \
+    ! coloreffects preset=0 \
+    ! videoflip video-direction=horiz \
+    ! comp0.sink_1 \
+  t0. \
+    ! queue \
+    ! tee name=t1 \
+      ! queue \
+      ! videoscale \
+      ! "video/x-raw,width=640,height=360" \
+      ! coloreffects preset=3 \
+      ! videoflip video-direction=vert \
+      ! comp1.sink_0 \
+    t1. \
+      ! queue \
+      ! videoscale \
+      ! "video/x-raw,width=640,height=360" \
+      ! coloreffects preset=4 \
+      ! videoflip video-direction=180 \
+      ! comp1.sink_1 \
+    compositor name=comp1 \
+        sink_0::xpos=0 sink_0::ypos=0 \
+        sink_1::xpos=640 sink_1::ypos=0 \
+    ! comp0.sink_2 \
+  compositor name=comp0 \
+      sink_0::xpos=0 sink_0::ypos=0 \
+      sink_1::xpos=640 sink_1::ypos=0 \
+      sink_2::xpos=0 sink_2::ypos=360 \
+  ! ximagesink
