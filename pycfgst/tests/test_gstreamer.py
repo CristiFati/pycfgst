@@ -8,8 +8,8 @@ try:
     gi.require_version("Gst", "1.0")
     from gi.repository import Gst
 
-    from pycfutils.gstreamer.pipeline_parser import PipelineParser
-    from pycfutils.gstreamer.registry_access import RegistryAccess
+    from pycfgst.pipeline_parser import PipelineParser
+    from pycfgst.registry_access import RegistryAccess
 except:
     pcfgst = None
 
@@ -88,7 +88,7 @@ class GStreamerTestCase(_GStreamerBaseTestCase):
         global RegistryAccess
         if pcfgst is None:
 
-            from pycfutils.gstreamer.registry_access import RegistryAccess
+            from pycfgst.registry_access import RegistryAccess
 
             ra = RegistryAccess()
             self.assertIsNotNone(ra)
@@ -125,7 +125,7 @@ class GStreamerTestCase(_GStreamerBaseTestCase):
         global PipelineParser
         if pcfgst is None:
 
-            from pycfutils.gstreamer.pipeline_parser import PipelineParser
+            from pycfgst.pipeline_parser import PipelineParser
 
             pparser = PipelineParser()
             self.assertIsNotNone(pparser)

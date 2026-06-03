@@ -18,7 +18,7 @@ except ImportError as ie:
 gi.require_version("Gst", "1.0")
 from gi.repository import GObject, Gst
 
-from pycfutils.gstreamer.registry_access import RegistryAccess
+from pycfgst.registry_access import RegistryAccess
 
 PARAMFLAG_WRITABLE = int(GObject.ParamFlags.WRITABLE)
 
