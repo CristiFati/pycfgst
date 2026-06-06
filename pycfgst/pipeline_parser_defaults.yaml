@@ -21,6 +21,9 @@ properties:
     audiomixer:
         - "!name"
 
+    autovideosink:
+        - filter-caps
+
     compositor:
         - "!name"
 

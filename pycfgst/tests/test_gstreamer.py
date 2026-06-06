@@ -1,55 +1,110 @@
 import os
+import sys
 import unittest
 
+from pycfutils import miscellaneous as cfmisc
+
 try:
-    pcfgst = True
     import gi
 
     gi.require_version("Gst", "1.0")
     from gi.repository import Gst
 
-    from pycfgst.pipeline_parser import PipelineParser
-    from pycfgst.registry_access import RegistryAccess
-except:
-    pcfgst = None
+    HAS_GI = True
+except (ImportError, ValueError):
+    HAS_GI = False
 
 
-# @TODO - cfati: Dummy
-class _GStreamerBaseTestCase(unittest.TestCase):
-    if pcfgst is None:  # Mock (PyGObject not installed)
-
-        def setUp(self):
-            import sys
-            from types import ModuleType
-
-            class GstDummy:
-                Bin = None
-                Pipeline = None
-
-                @staticmethod
-                def is_initialized():
-                    return False
-
-                @staticmethod
-                def init(argv=None):
-                    pass
-
-            print("PyGObject not installed. Run dummy test")
-
-            gi = ModuleType("gi")
-            sys.modules["gi"] = gi
-            gi.repository = ModuleType("gi.repository")
-            gi.repository.Gst = GstDummy
-            gi.require_version = lambda ns, ver: None
-            sys.modules["gi.repository"] = gi.repository
-
-    else:
-
-        def setUp(self):
-            Gst.init(argv=None)
+def ts_str():
+    return cfmisc.timestamp_string(
+        human_readable=True, time_separator="-", separator="-"
+    )
 
 
-class GStreamerTestCase(_GStreamerBaseTestCase):
+class DummyGStreamerTestCase(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        if HAS_GI:
+            raise unittest.SkipTest("PyGObject is installed; skipping dummy tests")
+
+        from types import ModuleType
+
+        class GstDummy:
+            Bin = None
+            Pipeline = None
+            is_initialized = staticmethod(lambda: False)
+            init = staticmethod(lambda argv=None: None)
+
+        gi_mod = ModuleType("gi")
+        gi_mod.repository = ModuleType("gi.repository")
+        gi_mod.repository.Gst = GstDummy
+        gi_mod.require_version = lambda ns, ver: None
+        sys.modules["gi"] = gi_mod
+        sys.modules["gi.repository"] = gi_mod.repository
+
+    def test_registry_access_import(self):
+        from pycfgst.registry_access import RegistryAccess
+
+        self.assertIsNotNone(RegistryAccess())
+
+    def test_pipeline_parser_import(self):
+        from pycfgst.pipeline_parser import PipelineParser
+
+        self.assertIsNotNone(PipelineParser())
+
+
+class _GStreamerTestCase(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        Gst.init(argv=None)
+
+        from pycfgst.pipeline_parser import PipelineParser
+        from pycfgst.registry_access import RegistryAccess
+
+        cls.RegistryAccess = RegistryAccess
+        cls.PipelineParser = PipelineParser
+
+    def split_output_string(self, output):
+        outls = output.split("\n")
+        outls = [e.strip("\\").strip() for e in outls if e.strip()][1:]
+        outls = tuple(e.strip() for e in " ".join(outls).split("!"))
+        return outls
+
+    def compare_pipeline_strings(self, input, output):  # Lamish
+        inls = tuple(e.strip() for e in input.split("!"))
+        outls = self.split_output_string(output)
+        # print("-------In\n", inls)
+        # print("-------Out\n", outls)
+
+        if len(inls) != len(outls):
+            print(f"Element count mismatch: {len(inls) != len(outls)}")
+            return False
+        for idx, inl in enumerate(inls):
+            i = inl.find(",")
+            i = inl.find(" ") if i == -1 else i
+            ine = inl if i == -1 else inl[:i].strip('"')
+            outl = outls[idx]
+            i = outl.find(",")
+            i = outl.find(" ") if i == -1 else i
+            oute = outl if i == -1 else outl[:i].strip('"')
+            if not ine or not oute or ine != oute:
+                print(f"Element ({idx}) mismatch: '{ine}' != '{oute}'")
+                return False
+        return True
+
+
+@unittest.skipUnless(HAS_GI, "PyGObject not installed")
+class RegistryAccessTestCase(_GStreamerTestCase):
+
+    def test_registry_access(self):
+        ra = self.RegistryAccess()
+        self.assertIsInstance(ra.contents(), dict)
+
+
+@unittest.skipUnless(HAS_GI, "PyGObject not installed")
+class PipelineParserGstLaunchTestCase(_GStreamerTestCase):
 
     @classmethod
     def generate_pipeline(cls, command):
@@ -84,58 +139,72 @@ class GStreamerTestCase(_GStreamerBaseTestCase):
             pipelines.append(" ".join(current))
         return pipelines
 
-    def test_registry_access(self):
-        global RegistryAccess
-        if pcfgst is None:
+    def test_gst_launch_pipelines(self):
+        pparser = self.PipelineParser()
+        pipeline_strings = tuple(self.read_pipelines())
+        for pipeline_string in pipeline_strings:
+            pipeline = self.generate_pipeline(pipeline_string)
+            output = pparser.gst_launch(pipeline)
+            self.assertTrue(self.compare_pipeline_strings(pipeline_string, output))
 
-            from pycfgst.registry_access import RegistryAccess
 
-            ra = RegistryAccess()
-            self.assertIsNotNone(ra)
-        else:
+@unittest.skipUnless(HAS_GI, "PyGObject not installed")
+class PipelineParserBinTestCase(_GStreamerTestCase):
 
-            ra = RegistryAccess()
-            self.assertIsInstance(ra.contents(), dict)
+    def save_dot(self, pipeline, file_name):
+        with open(file_name, mode="w") as f:
+            f.write(Gst.debug_bin_to_dot_data(pipeline, Gst.DebugGraphDetails.ALL))
 
-    def compare_pipeline_strings(self, input, output):  # Lame
-        inls = tuple(e.strip() for e in input.split("!"))
-        outls = output.split("\n")
-        start = 0
-        while start < len(outls) and not outls[start].strip():
-            start += 1
-        start += 1
-        outls = tuple(e.strip() for e in "\n".join(outls[start:]).split("!"))
-        if len(inls) != len(outls):
-            print(f"Element count mismatch: {len(inls) != len(outls)}")
-            return False
-        for idx, inl in enumerate(inls):
-            i = inl.find(",")
-            i = inl.find(" ") if i == -1 else i
-            ine = inl if i == -1 else inl[:i].strip('"')
-            outl = outls[idx]
-            i = outl.find(",")
-            i = outl.find(" ") if i == -1 else i
-            oute = outl if i == -1 else outl[:i].strip('"')
-            if not ine or not oute or ine != oute:
-                print(f"Element ({idx}) mismatch: '{ine}' != '{oute}'")
-                return False
-        return True
+    def create_element(self, factory, properties=None):
+        elem = Gst.ElementFactory.make(factory)
+        if properties:
+            for prop, value in properties.items():
+                elem.set_property(prop, value)
+        return elem
 
-    def test_pipeline_parser(self):
-        global PipelineParser
-        if pcfgst is None:
+    def create_bin(self, name, factory_data):
+        b = Gst.Bin.new(name)
+        elements = []
+        for factory, properties in factory_data:
+            elem = self.create_element(factory, properties)
+            b.add(elem)
+            elements.append(elem)
+        for i in range(len(elements) - 1):
+            elements[i].link(elements[i + 1])
+        sink_pad = elements[0].get_static_pad("sink")
+        if sink_pad:
+            b.add_pad(Gst.GhostPad.new("sink", sink_pad))
+        src_pad = elements[-1].get_static_pad("src")
+        if src_pad:
+            b.add_pad(Gst.GhostPad.new("src", src_pad))
+        return b
 
-            from pycfgst.pipeline_parser import PipelineParser
-
-            pparser = PipelineParser()
-            self.assertIsNotNone(pparser)
-        else:
-
-            pparser = PipelineParser()
-            pipeline_strings = tuple(self.read_pipelines())
-            for idx, pipeline_string in enumerate(pipeline_strings):
-                # print(f"----- Pipeline {idx}:\n--- Input:\n{pipeline_string}\n")
-                pipeline = self.generate_pipeline(pipeline_string)
-                output = pparser.gst_launch(pipeline)
-                # print(f"--- Output:\n{output}\n")
-                self.assertTrue(self.compare_pipeline_strings(pipeline_string, output))
+    def test_one_bin(self):
+        caps_str = "video/x-raw,width=960,height=540"
+        pipeline_str = (
+            f'videotestsrc pattern=18 ! videoscale ! "{caps_str}" ! autovideosink'
+        )
+        pipeline = Gst.Pipeline.new("test-one-bin")
+        src = self.create_element("videotestsrc", {"pattern": 18})
+        scale_bin = self.create_bin(
+            "scale-bin",
+            [
+                ("videoscale", {}),
+                (
+                    "capsfilter",
+                    {"caps": Gst.Caps.from_string(caps_str)},
+                ),
+            ],
+        )
+        sink = self.create_element("autovideosink")
+        for elem in (src, scale_bin, sink):
+            pipeline.add(elem)
+        src.link(scale_bin)
+        scale_bin.link(sink)
+        self.assertIsNotNone(pipeline)
+        # self.save_dot(pipeline, f"test_one_bin_{ts_str()}.dot")
+        pparser = self.PipelineParser()
+        pstr = pparser.gst_launch(pipeline)
+        # print(f"Output: {pstr}")
+        self.assertTrue(self.compare_pipeline_strings(pipeline_str, pstr))
+        pipeline.set_state(Gst.State.NULL)
