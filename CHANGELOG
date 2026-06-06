@@ -1,0 +1,70 @@
+---------- FILE MAINTAINED MANUALLY ----------
+
+Records listed in reverse chronological order (most recent on top).
+Users are encouraged to "log" their significant (relative term) changes like:
+  - New features
+  - Critical fixes
+  - Large code changes
+  - ...
+
+File is organized in sections where each section represents a release name
+A release name is enclosed in square brackets and starts with a "v",
+  just like its tag name (except for the first one which is "TBR")
+Changes under each release are indented by 4 spaces and start with a hyphen ("-"):
+    1.1. A PR (or issue) description
+    1.2. The URL on the following line (aligned with the description)
+or (if there's no PR / issue):
+    2.1. A brief description
+    2.2. Optionally (same alignment as #1.2.), separated by coma(s) (",") in any order:
+        - Name (real, nick user) - starting with at ("@")
+        - Date - YYYY/MM/DD, YY/MM/DD, YYYYMMDD, YYMMDD
+        - Commit hash(es) - starting with a pound ("#")
+
+Example:
+
+[vTBR]
+    - Issue reporting a bug
+      https://github.com/CristiFati/pycfutils/issues/...
+    - Untracked change (feature)
+      240510, #31416ab, @DummyUser
+
+[v6.1.8]
+    - Untracked change - other
+      @John Doe, 2024/03/31
+    - A PR description
+      https://github.com/CristiFati/pycfutils/pulls/...
+    - Some other untracked change
+    - Some other untracked change (0)
+      #cd27183
+
+
+===============================================================================
+C         H         A         N        G        E         L         O         G
+===============================================================================
+
+
+[vTBR]
+
+[v2026.06.15]
+    - Version and build files
+    - Explicit request pad names
+    - Shell quoting
+    - Improvements and fixes
+      @CristiFati, 260614
+    - Config keys rename
+    - Handling proxy pad indirection levels > 1
+    - Refactor
+      @CristiFati, 260613
+    - Property exclusion mechanism
+      @CristiFati, 260606
+    - Reorganization (branched out ycfutils)
+    - Tab properties
+      @CristiFati, 260603
+    - Pipeline parser
+      @CristiFati, 260602
+    - Older PGO versions support
+      @CristiFati, 241111
+    - PGO dummy mock
+      @CristiFati, 240512
+    - Registry access
+      @CristiFato, 240510
