@@ -1,0 +1,87 @@
+properties:
+    # All
+    "*":
+        - name
+        - parent
+        - qos
+        - "@pad":
+            - direction
+            - name
+            - parent
+            - template
+            - zorder
+
+    # Globbed
+
+    # Specific elements
+    # Gst
+    adder:
+        - "!name"
+
+    audiomixer:
+        - "!name"
+
+    compositor:
+        - "!name"
+
+    concat:
+        - "!name"
+
+    funnel:
+        - "!name"
+
+    input-selector:
+        - "!name"
+
+    matroskamux:
+        - "!name"
+
+    mp4mux:
+        - "!name"
+
+    output-selector:
+        - "!name"
+
+    tee:
+        - "!name"
+
+    videoflip:
+        - method
+
+    ximagesink:
+        - max-lateness
+        - processing-deadline
+
+    # Nvidia DS
+    nvcompositor:
+        - "!name"
+
+    nvmixer:
+        - "!name"
+
+    nvmultistreamtiler:
+        - "!name"
+
+    nvstreamdemux:
+        - "!name"
+
+    nvstreammux:
+        - "!name"
+
+    nvtee:
+        - "!name"
+
+    nvtracker:
+        - "!name"
+
+    # Qualcomm IM SDK
+    qtimcomposer:
+        - "!name"
+
+    qtimdemux:
+        - "!name"
+
+    qtimmux:
+        - "!name"
+
+traverse_bins: []

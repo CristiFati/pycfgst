@@ -1,11 +1,8 @@
 import enum
-import pathlib
 import sys
 import traceback
 
 import networkx
-import yaml
-
 from pycfutils.exceptions import ModuleException
 
 try:
@@ -18,19 +15,18 @@ except ImportError as ie:
 gi.require_version("Gst", "1.0")
 from gi.repository import GObject, Gst
 
+from pycfgst._pipeline_parser_config import ALL_MARKER, PipelineParserConfig
 from pycfgst.registry_access import RegistryAccess
-
-PARAMFLAG_WRITABLE = int(GObject.ParamFlags.WRITABLE)
-
-DEFAULT_ELEMENT_INDENT = " " * 2
-DEFAULT_PROPERTY_INDENT = " " * 4
-DEFAULT_GSTLAUNCH = "gst-launch-1.0 -e"  # v
-ALL_MARKER = "*"
 
 
 class PipelineParser:
+
+    DEFAULT_ELEMENT_INDENT = " " * 2
+    DEFAULT_PROPERTY_INDENT = " " * 4
+    DEFAULT_GSTLAUNCH = "gst-launch-1.0 -e"  # v
+
     _SHELL_CHARACTERS = ("(", ")", " ", ";")
-    _PAD_DISCARD_PROPERTIES = {"direction", "template"}
+    _PARAMFLAG_WRITABLE = int(GObject.ParamFlags.WRITABLE)
 
     class Direction(enum.IntEnum):
         Unlinked = 0
@@ -40,14 +36,19 @@ class PipelineParser:
     def __init__(self):
         self._element_classes = ()
         self._capsfilter_class = None
-        try:
-            p = pathlib.Path(__file__).absolute()
-            p = p.parent / f"{p.stem}_property_filter.yaml"
-            with open(str(p)) as f:
-                self._discard_properties = yaml.safe_load(f)
-        except Exception:
-            traceback.print_exc()
-            self._discard_properties = None
+        self._config = PipelineParserConfig()
+
+    def configure(
+        self,
+        user_config=None,
+        merge=True,
+        merge_policy=PipelineParserConfig.MERGE_POLICY_SPECIFICITY,
+    ):
+        self._config = PipelineParserConfig(
+            user_config=user_config,
+            merge=merge,
+            merge_policy=merge_policy,
+        )
 
     @classmethod
     def _pad_internal(cls, pad):
@@ -72,13 +73,13 @@ class PipelineParser:
         return int0 and int1 and int0.peer == int1 and int1.peer == int0
 
     @classmethod
-    def element_direction(cls, gol, gor):
-        for sink_pad in gol.sinkpads:
-            for src_pad in gor.srcpads:
+    def element_direction(cls, left, right):
+        for sink_pad in left.sinkpads:
+            for src_pad in right.srcpads:
                 if cls._is_linked_pads(src_pad, sink_pad):
                     return cls.Direction.RightLeft
-        for sink_pad in gor.sinkpads:
-            for src_pad in gol.srcpads:
+        for sink_pad in right.sinkpads:
+            for src_pad in left.srcpads:
                 if cls._is_linked_pads(src_pad, sink_pad):
                     return cls.Direction.LeftRight
         return cls.Direction.Unlinked
@@ -112,26 +113,22 @@ class PipelineParser:
         return ret
 
     @classmethod
-    def _properties(
-        cls,
-        go,
-        discard,
-        exclude_name_func=lambda arg: len(arg.sinkpads) <= 1 and len(arg.srcpads) <= 1,
-    ):
-        discard_props = (
-            set(discard.get(go.get_factory().name, []) + discard.get(ALL_MARKER, []))
-            if discard
-            else set()
-        )
+    def force_exclude_property(cls, prop, val=None):
+        if not (prop.flags & cls._PARAMFLAG_WRITABLE):
+            return True
+        if val is not None and val == prop.default_value:
+            return True
+        return False
+
+    @classmethod
+    def _filtered_properties(cls, go, discard_props):
         if ALL_MARKER in discard_props:
             return {}
         ret = {}
         for prop in go.list_properties():
             if prop.name in discard_props:
                 continue
-            if not (prop.flags & PARAMFLAG_WRITABLE):
-                continue
-            if prop.name == "name" and exclude_name_func(go):
+            if cls.force_exclude_property(prop):
                 continue
             try:
                 val = go.get_property(prop.name)
@@ -141,37 +138,9 @@ class PipelineParser:
             val = cls._value(val)
             if val is None:
                 continue
-            if val != prop.default_value:
-                ret[prop.name] = val
-        return ret
-
-    @classmethod
-    def _pad_properties(cls, pad, discard):
-        discard_props = (
-            cls._PAD_DISCARD_PROPERTIES | set(discard.get(ALL_MARKER, []))
-            if discard
-            else set(cls._PAD_DISCARD_PROPERTIES)
-        )
-        if ALL_MARKER in discard_props:
-            return {}
-        ret = {}
-        for prop in pad.list_properties():
-            if prop.name in discard_props:
+            if cls.force_exclude_property(prop, val):
                 continue
-            if not (prop.flags & PARAMFLAG_WRITABLE):
-                continue
-            if prop.name == "name":
-                continue
-            try:
-                val = pad.get_property(prop.name)
-            except Exception:
-                traceback.print_exc()
-                continue
-            val = cls._value(val)
-            if val is None:
-                continue
-            if val != prop.default_value:
-                ret[prop.name] = val
+            ret[prop.name] = val
         return ret
 
     @classmethod
@@ -236,22 +205,24 @@ class PipelineParser:
         else:  # Fallback (lame)
             return element.__class__.__name__ == "GstCapsFilter"
 
-    def _format_element(
-        self, go, level, base_indent, prop_indent, discard_props, pre_link
-    ):
+    def _format_element(self, element, level, base_indent, prop_indent, pre_link):
         indent = base_indent * level
         link_symbol = f"{'! ' if pre_link else ''}"
-        if self.is_capsfilter(go):
+        if self.is_capsfilter(element):
             return [
                 f"{indent}{link_symbol}"
-                f"{self._shell_quote_item(go.get_property('caps').to_string())} \\"
+                f"{self._shell_quote_item(element.get_property('caps').to_string())} \\"
             ]
+        factory_name = element.get_factory().name
+        resolved = self._config.resolve_filters(factory_name)
         pindent = indent + prop_indent
-        ret = [f"{indent}{link_symbol}{go.get_factory().name} \\"]
-        for k, v in self._properties(go, discard_props).items():
+        ret = [f"{indent}{link_symbol}{factory_name} \\"]
+        for k, v in self._filtered_properties(
+            element, resolved.element_properties
+        ).items():
             ret.append(f"{pindent}{k}={self._format_value(v)} \\")
-        for pad in go.pads:
-            pad_props = self._pad_properties(pad, discard_props)
+        for pad in element.pads:
+            pad_props = self._filtered_properties(pad, resolved.pad_properties)
             if pad_props:
                 props_str = " ".join(
                     f"{pad.name}::{k}={self._format_value(v)}"
@@ -278,7 +249,6 @@ class PipelineParser:
         level,
         base_elem_indent,
         prop_indent,
-        discard_props,
         pre_link,
         multisinks,
     ):
@@ -294,7 +264,7 @@ class PipelineParser:
                 )
         else:
             ret += self._format_element(
-                node, level, base_elem_indent, prop_indent, discard_props, pre_link
+                node, level, base_elem_indent, prop_indent, pre_link
             )
             succs = tuple(graph.successors(node))
             if len(succs) > 1:
@@ -306,7 +276,6 @@ class PipelineParser:
                         level + 1,
                         base_elem_indent,
                         prop_indent,
-                        discard_props,
                         True,
                         multisinks,
                     )
@@ -317,7 +286,6 @@ class PipelineParser:
                     level,
                     base_elem_indent,
                     prop_indent,
-                    discard_props,
                     True,
                     multisinks,
                 )
@@ -325,7 +293,7 @@ class PipelineParser:
             ret += self._sink_reference(node, level, base_elem_indent, len(levels) - 1)
             elem_level = min(levels)
             ret += self._format_element(
-                node, elem_level, base_elem_indent, prop_indent, discard_props, False
+                node, elem_level, base_elem_indent, prop_indent, False
             )
             succs = tuple(graph.successors(node))
             if len(succs) > 1:
@@ -337,7 +305,6 @@ class PipelineParser:
                         elem_level + 1,
                         base_elem_indent,
                         prop_indent,
-                        discard_props,
                         True,
                         multisinks,
                     )
@@ -348,7 +315,6 @@ class PipelineParser:
                     elem_level,
                     base_elem_indent,
                     prop_indent,
-                    discard_props,
                     True,
                     multisinks,
                 )
@@ -358,11 +324,16 @@ class PipelineParser:
         self,
         gst_object_root,
         level=0,
-        element_indent=DEFAULT_ELEMENT_INDENT,
-        property_indent=DEFAULT_PROPERTY_INDENT,
-        discard_properties=None,
-        command=DEFAULT_GSTLAUNCH,
+        element_indent=None,
+        property_indent=None,
+        command=None,
     ):
+        if element_indent is None:
+            element_indent = self.DEFAULT_ELEMENT_INDENT
+        if property_indent is None:
+            property_indent = self.DEFAULT_PROPERTY_INDENT
+        if command is None:
+            command = self.DEFAULT_GSTLAUNCH
         graph = self._generate_graph(gst_object_root)
         ret = [f"\n{command} \\"] if command else []
         srcs = [e[0] for e in graph.in_degree if e[1] == 0]
@@ -373,11 +344,6 @@ class PipelineParser:
                 level + 1,
                 element_indent,
                 property_indent,
-                (
-                    self._discard_properties
-                    if discard_properties is None
-                    else discard_properties
-                ),
                 False,
                 {},
             )
