@@ -16,7 +16,6 @@ gi.require_version("Gst", "1.0")
 from gi.repository import GObject, Gst
 
 from pycfgst._pipeline_parser_config import ALL_MARKER, PipelineParserConfig
-from pycfgst.registry_access import RegistryAccess
 
 
 class PipelineParser:
@@ -34,8 +33,6 @@ class PipelineParser:
         RightLeft = 2
 
     def __init__(self):
-        self._element_classes = ()
-        self._capsfilter_class = None
         self._config = PipelineParserConfig()
 
     def configure(
@@ -51,26 +48,32 @@ class PipelineParser:
         )
 
     @classmethod
-    def _pad_internal(cls, pad):
-        last = None
-        cur = pad
+    def _resolve_peer(cls, pad, target_element, max_indirections):
+        cur = pad.peer
+        level = 0
         while cur and isinstance(cur, Gst.ProxyPad):
-            last = cur
-            cur = last.get_internal()
-            if cur == pad:
+            if cur.get_parent() == target_element:
+                return cur
+            internal = cur.get_internal()
+            if not internal or not internal.peer:
                 break
-        return last
+            cur = internal.peer
+            level += 1
+            if 0 < max_indirections < level:
+                return None
+        return cur
 
     @classmethod
-    def _is_linked_pads(cls, pad0, pad1, direct_only=False):
-        peer0 = pad0.peer
-        peer1 = pad1.peer
-        ret = peer0 == pad1 and peer1 == pad0
-        if direct_only or ret:
-            return ret
-        int0 = cls._pad_internal(peer0)
-        int1 = cls._pad_internal(peer1)
-        return int0 and int1 and int0.peer == int1 and int1.peer == int0
+    def _is_linked_pads(cls, pad0, pad1, max_indirections=-1):
+        if pad0.peer == pad1 and pad1.peer == pad0:
+            return True
+        if max_indirections == 0:
+            return False
+        elem0 = pad0.get_parent()
+        elem1 = pad1.get_parent()
+        cur0 = cls._resolve_peer(pad0, elem1, max_indirections)
+        cur1 = cls._resolve_peer(pad1, elem0, max_indirections)
+        return cur0 == pad1 and cur1 == pad0
 
     @classmethod
     def element_direction(cls, left, right):
@@ -153,28 +156,26 @@ class PipelineParser:
         ret = [f"{base_indent * level}! {go.name}.{go.sinkpads[pad_idx].name} \\"]
         return ret
 
-    def _initialize_classes(self):
-        if not self._element_classes or not self._capsfilter_class:
-            ra = RegistryAccess()
-            self._element_classes = ra.element_classes()
-            self._capsfilter_class = ra.element_classes_dict().get("capsfilter")
-
     def _flatten_object(self, obj, out):
-        if isinstance(obj, self._element_classes):
+        if isinstance(obj, Gst.Bin):
+            factory = obj.get_factory()
+            if factory is not None and factory.name not in ("bin", "pipeline"):
+                out.append(obj)
+                return
+            children = obj.children
+            if children:
+                self._flatten_seq(children, out)
+                return
+        elif obj.get_factory() is not None:
             out.append(obj)
             return
-        children = getattr(obj, "children", None)
-        if children:
-            self._flatten_seq(children, out)
-        else:
-            out.append(obj)
+        out.append(obj)
 
     def _flatten_seq(self, seq, out):
         for obj in seq:
             self._flatten_object(obj, out)
 
     def _flatten(self, obj):
-        self._initialize_classes()
         ret = []
         if isinstance(obj, (list, tuple)):
             self._flatten_seq(obj, ret)
@@ -185,7 +186,6 @@ class PipelineParser:
         return ret
 
     def _generate_graph(self, obj):
-        self._initialize_classes()
         ret = networkx.DiGraph()
         elements = self._flatten(obj)
         for item0 in elements:
@@ -200,10 +200,7 @@ class PipelineParser:
         return ret
 
     def is_capsfilter(self, element):
-        if self._capsfilter_class:
-            return isinstance(element, self._capsfilter_class)
-        else:  # Fallback (lame)
-            return element.__class__.__name__ == "GstCapsFilter"
+        return element.__class__.__name__ == "GstCapsFilter"
 
     def _format_element(self, element, level, base_indent, prop_indent, pre_link):
         indent = base_indent * level
