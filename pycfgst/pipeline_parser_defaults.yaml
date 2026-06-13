@@ -1,4 +1,4 @@
-properties:
+excluded_property_filter:
     # All
     "*":
         - name
@@ -87,4 +87,4 @@ properties:
     qtimmux:
         - "!name"
 
-traverse_bins: []
+traversed_bins: []

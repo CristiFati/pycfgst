@@ -298,7 +298,7 @@ class MergePolicyTestCase(unittest.TestCase):
             PipelineParserConfig(merge_policy="source")
 
 
-class TraverseBinsTestCase(unittest.TestCase):
+class TraversedBinsTestCase(unittest.TestCase):
 
     def test_default_empty(self):
         cfg = PipelineParserConfig()
@@ -306,8 +306,8 @@ class TraverseBinsTestCase(unittest.TestCase):
 
     def test_from_user_config(self):
         user_config = {
-            "properties": {"*": ["parent"]},
-            "traverse_bins": ["bin0", "bin1"],
+            "excluded_property_filter": {"*": ["parent"]},
+            "traversed_bins": ["bin0", "bin1"],
         }
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             yaml.dump(user_config, f)
@@ -329,8 +329,8 @@ class PipelineParserConfigLoadTestCase(unittest.TestCase):
 
     def test_user_file_loading(self):
         user_config = {
-            "properties": {"*": ["custom-prop"], "tee": ["alloc-pad"]},
-            "traverse_bins": [],
+            "excluded_property_filter": {"*": ["custom-prop"], "tee": ["alloc-pad"]},
+            "traversed_bins": [],
         }
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             yaml.dump(user_config, f)
@@ -346,7 +346,7 @@ class PipelineParserConfigLoadTestCase(unittest.TestCase):
 
     def test_user_file_no_merge(self):
         user_config = {
-            "properties": {"*": ["custom-prop"]},
+            "excluded_property_filter": {"*": ["custom-prop"]},
         }
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             yaml.dump(user_config, f)

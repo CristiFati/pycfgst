@@ -131,8 +131,8 @@ class PipelineParserConfig:
     MERGE_POLICY_SPECIFICITY = "specificity"
     MERGE_POLICIES = (MERGE_POLICY_SPECIFICITY,)
 
-    _CONFIG_KEY_PROPERTIES = "properties"
-    _CONFIG_KEY_TRAVERSE_BINS = "traverse_bins"
+    _CONFIG_KEY_PROPERTIES = "excluded_property_filter"
+    _CONFIG_KEY_TRAVERSE_BINS = "traversed_bins"
 
     def __init__(
         self, user_config=None, merge=True, merge_policy=MERGE_POLICY_SPECIFICITY
