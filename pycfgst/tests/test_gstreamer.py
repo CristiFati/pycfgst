@@ -15,6 +15,9 @@ except (ImportError, ValueError):
     HAS_GI = False
 
 
+SAMPLE_VIDEO = os.environ.get("SAMPLE_VIDEO", "/media/videos/sample_1080p_h264.mp4")
+
+
 def ts_str():
     return cfmisc.timestamp_string(
         human_readable=True, time_separator="-", separator="-"
@@ -104,6 +107,26 @@ class RegistryAccessTestCase(_GStreamerTestCase):
 
 
 @unittest.skipUnless(HAS_GI, "PyGObject not installed")
+class PipelineParserGenericTestCase(_GStreamerTestCase):
+
+    def test_double_properties(self):
+        volume = 1.33
+        pipeline_str = f"audiotestsrc ! volume volume={volume} ! autoaudiosink"
+        pipeline = Gst.parse_launch(pipeline_str)
+        self.assertIsNotNone(pipeline)
+        pipeline.set_state(Gst.State.PAUSED)
+        pparser = self.PipelineParser()
+        pstr = pparser.gst_launch(pipeline)
+        # print(f"Output: {pstr}")
+        outls = self.split_output_string(pstr)
+        self.assertIn(
+            f"volume volume={self.PipelineParser.format_value(volume)}",
+            " ".join(outls),
+        )
+        pipeline.set_state(Gst.State.NULL)
+
+
+@unittest.skipUnless(HAS_GI, "PyGObject not installed")
 class PipelineParserGstLaunchTestCase(_GStreamerTestCase):
 
     @classmethod
@@ -144,6 +167,7 @@ class PipelineParserGstLaunchTestCase(_GStreamerTestCase):
         pipeline_strings = tuple(self.read_pipelines())
         for pipeline_string in pipeline_strings:
             pipeline = self.generate_pipeline(pipeline_string)
+            self.assertIsNotNone(pipeline)
             output = pparser.gst_launch(pipeline)
             self.assertTrue(self.compare_pipeline_strings(pipeline_string, output))
 
@@ -202,9 +226,22 @@ class PipelineParserBinTestCase(_GStreamerTestCase):
         src.link(scale_bin)
         scale_bin.link(sink)
         self.assertIsNotNone(pipeline)
-        # self.save_dot(pipeline, f"test_one_bin_{ts_str()}.dot")
+        pipeline.set_state(Gst.State.PAUSED)
         pparser = self.PipelineParser()
         pstr = pparser.gst_launch(pipeline)
+        # self.save_dot(pipeline, f"test_one_bin_{ts_str()}.dot")
         # print(f"Output: {pstr}")
         self.assertTrue(self.compare_pipeline_strings(pipeline_str, pstr))
+        pipeline.set_state(Gst.State.NULL)
+
+    @unittest.skipUnless(os.path.isfile(SAMPLE_VIDEO), "sample video not available")
+    def test_playbin(self):
+        pipeline = Gst.parse_launch(f"playbin uri=file://{SAMPLE_VIDEO}")
+        self.assertIsNotNone(pipeline)
+        pipeline.set_state(Gst.State.PAUSED)
+        pparser = self.PipelineParser()
+        pstr = pparser.gst_launch(pipeline)
+        # self.save_dot(pipeline, f"test_playbin_{ts_str()}.dot")
+        # print(f"Output: {pstr}")
+        self.assertTrue(self.split_output_string(pstr)[0].startswith("playbin"))
         pipeline.set_state(Gst.State.NULL)

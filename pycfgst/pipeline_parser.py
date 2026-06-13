@@ -25,7 +25,9 @@ class PipelineParser:
     DEFAULT_GSTLAUNCH = "gst-launch-1.0 -e"  # v
 
     _SHELL_CHARACTERS = ("(", ")", " ", ";")
+    _PARAMFLAG_READABLE = int(GObject.ParamFlags.READABLE)
     _PARAMFLAG_WRITABLE = int(GObject.ParamFlags.WRITABLE)
+    _TRAVERSED_FACTORIES = ("bin", "pipeline")
 
     class Direction(enum.IntEnum):
         Unlinked = 0
@@ -100,16 +102,18 @@ class PipelineParser:
         return f'"{s}"'
 
     @classmethod
-    def _format_value(cls, val):
+    def _quote_value(cls, val):
         return cls._shell_quote_item(str(val))
 
     @classmethod
-    def _value(cls, val):
+    def format_value(cls, val):
         if isinstance(val, int):
-            ret = int(val)
+            ret = int(val)  # bools, enums
+        elif isinstance(val, float):
+            ret = val  # f"{val:.03f}"  # ?
         else:
             to_string = getattr(val, "to_string", None)
-            if to_string:
+            if callable(to_string):
                 ret = val.to_string()
             else:
                 ret = val
@@ -117,6 +121,8 @@ class PipelineParser:
 
     @classmethod
     def force_exclude_property(cls, prop, val=None):
+        if not (prop.flags & cls._PARAMFLAG_READABLE):
+            return True
         if not (prop.flags & cls._PARAMFLAG_WRITABLE):
             return True
         if val is not None and val == prop.default_value:
@@ -138,10 +144,12 @@ class PipelineParser:
             except Exception:
                 traceback.print_exc()
                 continue
-            val = cls._value(val)
-            if val is None:
-                continue
             if cls.force_exclude_property(prop, val):
+                continue
+            val = cls.format_value(val)
+            if isinstance(val, int):
+                val = int(val)
+            if val is None:
                 continue
             ret[prop.name] = val
         return ret
@@ -159,7 +167,11 @@ class PipelineParser:
     def _flatten_object(self, obj, out):
         if isinstance(obj, Gst.Bin):
             factory = obj.get_factory()
-            if factory is not None and factory.name not in ("bin", "pipeline"):
+            if (
+                factory is not None
+                and factory.name not in self._TRAVERSED_FACTORIES
+                and factory.name not in self._config.traverse_bins
+            ):
                 out.append(obj)
                 return
             children = obj.children
@@ -188,6 +200,7 @@ class PipelineParser:
     def _generate_graph(self, obj):
         ret = networkx.DiGraph()
         elements = self._flatten(obj)
+        ret.add_nodes_from(elements)
         for item0 in elements:
             for item1 in elements:
                 if item0 == item1:
@@ -217,12 +230,12 @@ class PipelineParser:
         for k, v in self._filtered_properties(
             element, resolved.element_properties
         ).items():
-            ret.append(f"{pindent}{k}={self._format_value(v)} \\")
+            ret.append(f"{pindent}{k}={self._quote_value(v)} \\")
         for pad in element.pads:
             pad_props = self._filtered_properties(pad, resolved.pad_properties)
             if pad_props:
                 props_str = " ".join(
-                    f"{pad.name}::{k}={self._format_value(v)}"
+                    f"{pad.name}::{k}={self._quote_value(v)}"
                     for k, v in pad_props.items()
                 )
                 ret.append(f"{pindent}{props_str} \\")
@@ -325,6 +338,10 @@ class PipelineParser:
         property_indent=None,
         command=None,
     ):
+        if not isinstance(gst_object_root, Gst.Object):
+            raise TypeError(
+                f"Expected Gst.Object, got {type(gst_object_root).__name__}"
+            )
         if element_indent is None:
             element_indent = self.DEFAULT_ELEMENT_INDENT
         if property_indent is None:

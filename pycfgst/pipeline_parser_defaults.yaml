@@ -12,6 +12,14 @@ excluded_property_filter:
             - zorder
 
     # Globbed
+    "*bin":
+        - caps
+
+    "*testsrc":
+        - blocksize
+
+    "auto*":
+        - filter-caps
 
     # Specific elements
     # Gst
@@ -20,9 +28,6 @@ excluded_property_filter:
 
     audiomixer:
         - "!name"
-
-    autovideosink:
-        - filter-caps
 
     compositor:
         - "!name"
@@ -87,4 +92,4 @@ excluded_property_filter:
     qtimmux:
         - "!name"
 
-traversed_bins: []
+traversed_bins: []  # Experimental
