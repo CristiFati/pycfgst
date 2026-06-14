@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import dataclasses
 import fnmatch
 import sys
+from typing import Any
 
 try:
     from importlib.resources import files
@@ -19,20 +22,17 @@ _GLOB_CHARS = frozenset("*?[]")
 
 @dataclasses.dataclass
 class ResolvedFilter:
-    element_properties: set
-    pad_properties: set
+    element_properties: set[str]
+    pad_properties: set[str]
 
 
-def _is_glob(key):
+def _is_glob(key: str) -> bool:
     return key != ALL_MARKER and any(c in key for c in _GLOB_CHARS)
 
 
-def _classify_entries(config):
-    """Split config keys into (global_entry, globs_in_order, exact_entries).
-
-    Returns:
-        tuple: (global_items: list|None, globs: list[(pattern, items)], exacts: dict[name, items])
-    """
+def _classify_entries(
+    config: dict[str, list] | None,
+) -> tuple[list | None, list[tuple[str, list]], dict[str, list]]:
     global_items = None
     globs = []
     exacts = {}
@@ -48,7 +48,7 @@ def _classify_entries(config):
     return global_items, globs, exacts
 
 
-def _apply_items(element_props, pad_props, items):
+def _apply_items(element_props: set[str], pad_props: set[str], items: list) -> None:
     for item in items:
         if isinstance(item, dict):
             if PAD_KEY in item:
@@ -76,7 +76,10 @@ def _apply_items(element_props, pad_props, items):
             element_props.add(item)
 
 
-def _resolve_single_source(classified, element_name):
+def _resolve_single_source(
+    classified: tuple[list | None, list[tuple[str, list]], dict[str, list]],
+    element_name: str,
+) -> tuple[set[str], set[str]]:
     global_items, globs, exacts = classified
     element_props = set()
     pad_props = set()
@@ -94,7 +97,11 @@ def _resolve_single_source(classified, element_name):
     return element_props, pad_props
 
 
-def _resolve_interleaved(default_classified, user_classified, element_name):
+def _resolve_interleaved(
+    default_classified: tuple[list | None, list[tuple[str, list]], dict[str, list]],
+    user_classified: tuple[list | None, list[tuple[str, list]], dict[str, list]],
+    element_name: str,
+) -> tuple[set[str], set[str]]:
     d_global, d_globs, d_exacts = default_classified
     u_global, u_globs, u_exacts = user_classified
     element_props = set()
@@ -119,7 +126,7 @@ def _resolve_interleaved(default_classified, user_classified, element_name):
     return element_props, pad_props
 
 
-def _extract_section(raw, key, default=None):
+def _extract_section(raw: Any, key: str, default: Any = None) -> Any:
     if isinstance(raw, dict):
         return raw.get(key, default)
     return default
@@ -135,8 +142,11 @@ class PipelineParserConfig:
     _CONFIG_KEY_EXPLICIT_REQUEST_PADS = "explicit_request_pads"
 
     def __init__(
-        self, user_config=None, merge=True, merge_policy=MERGE_POLICY_SPECIFICITY
-    ):
+        self,
+        user_config: str | None = None,
+        merge: bool = True,
+        merge_policy: str = MERGE_POLICY_SPECIFICITY,
+    ) -> None:
         if merge_policy not in self.MERGE_POLICIES:
             raise ValueError(
                 f"Unsupported merge_policy: {merge_policy!r}. Supported: {self.MERGE_POLICIES}"
@@ -174,17 +184,17 @@ class PipelineParserConfig:
             self._user_explicit_request_pads = set()
 
     @staticmethod
-    def _load_defaults():
+    def _load_defaults() -> Any:
         # Might be moved into a different (pycfgst_config) package / repository
         data = files("pycfgst") / "pipeline_parser_defaults.yaml"
         return yaml.safe_load(data.read_text()) or {}
 
     @staticmethod
-    def _load(path):
+    def _load(path: str) -> Any:
         with open(str(path)) as f:
             return yaml.safe_load(f) or {}
 
-    def resolve_filters(self, element_name):
+    def resolve_filters(self, element_name: str) -> ResolvedFilter:
         if self._user_classified is not None and not self._merge:
             ep, pp = _resolve_single_source(self._user_classified, element_name)
         elif self._user_classified is not None and self._merge:
@@ -201,13 +211,13 @@ class PipelineParserConfig:
         )
 
     @property
-    def traverse_bins(self):
+    def traverse_bins(self) -> set[str]:
         if self._user_traverse_bins:
             return self._user_traverse_bins
         return self._default_traverse_bins
 
     @property
-    def explicit_request_pads(self):
+    def explicit_request_pads(self) -> set[str]:
         if self._user_explicit_request_pads:
             return self._user_explicit_request_pads
         return self._default_explicit_request_pads

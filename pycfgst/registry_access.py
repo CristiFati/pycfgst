@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import annotations
+
 import sys
 from pprint import pprint
 
@@ -19,7 +21,7 @@ __all__ = ("RegistryAccess",)
 
 
 class RegistryAccess:
-    def __init__(self):
+    def __init__(self) -> None:
         if not Gst.is_initialized():
             print("Gst engine is not initialized. Initializing.")
             Gst.init(argv=None)
@@ -30,7 +32,7 @@ class RegistryAccess:
         self.__failed_classes = ()
         self.invalidate_caches()
 
-    def contents(self, force=False):
+    def contents(self, force: bool = False) -> dict[str, dict[str, Gst.PluginFeature]]:
         if self.__contents is None or force:
             registry = Gst.Registry.get()
             plugin_names = sorted(e.get_name() for e in registry.get_plugin_list())
@@ -48,7 +50,7 @@ class RegistryAccess:
             }
         return self.__contents
 
-    def element_classes_dict(self, force=False):
+    def element_classes_dict(self, force: bool = False) -> dict[str, type]:
         if self.__element_classes_dict is None or force:
             failed_classes = []
             items = []
@@ -72,10 +74,12 @@ class RegistryAccess:
         return self.__element_classes_dict
 
     @property
-    def failed_classes(self):
+    def failed_classes(self) -> tuple[str, ...]:
         return self.__failed_classes
 
-    def element_classes(self, force=False, exclude_containers=True):
+    def element_classes(
+        self, force: bool = False, exclude_containers: bool = True
+    ) -> tuple[type, ...]:
         if self.__element_classes is None or force:
             self.__element_classes = tuple(
                 item for item in self.element_classes_dict(force=force).values()
@@ -90,7 +94,7 @@ class RegistryAccess:
             else self.__element_classes
         )
 
-    def invalidate_caches(self):
+    def invalidate_caches(self) -> None:
         self.__contents = None
         self.__element_classes_dict = None
         self.__element_classes = None

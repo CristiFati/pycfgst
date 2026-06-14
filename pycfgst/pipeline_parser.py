@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import enum
 import shlex
 import sys
 import traceback
+from typing import Any
 
 import networkx
 from pycfutils.exceptions import ModuleException
@@ -17,6 +20,8 @@ gi.require_version("Gst", "1.0")
 from gi.repository import GObject, Gst
 
 from pycfgst._pipeline_parser_config import ALL_MARKER, PipelineParserConfig
+
+__all__ = ("PipelineParser",)
 
 
 class PipelineParser:
@@ -34,15 +39,15 @@ class PipelineParser:
         LeftRight = 1
         RightLeft = 2
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._config = PipelineParserConfig()
 
     def configure(
         self,
-        user_config=None,
-        merge=True,
-        merge_policy=PipelineParserConfig.MERGE_POLICY_SPECIFICITY,
-    ):
+        user_config: str | None = None,
+        merge: bool = True,
+        merge_policy: str = PipelineParserConfig.MERGE_POLICY_SPECIFICITY,
+    ) -> None:
         self._config = PipelineParserConfig(
             user_config=user_config,
             merge=merge,
@@ -50,7 +55,9 @@ class PipelineParser:
         )
 
     @classmethod
-    def _resolve_peer(cls, pad, target_element, max_indirections):
+    def _resolve_peer(
+        cls, pad: Gst.Pad, target_element: Gst.Element, max_indirections: int
+    ) -> Gst.Pad | None:
         cur = pad.peer
         level = 0
         while cur and isinstance(cur, Gst.ProxyPad):
@@ -66,7 +73,9 @@ class PipelineParser:
         return cur
 
     @classmethod
-    def _is_linked_pads(cls, pad0, pad1, max_indirections=-1):
+    def _is_linked_pads(
+        cls, pad0: Gst.Pad, pad1: Gst.Pad, max_indirections: int = -1
+    ) -> bool:
         if pad0.peer == pad1 and pad1.peer == pad0:
             return True
         if max_indirections == 0:
@@ -78,7 +87,9 @@ class PipelineParser:
         return cur0 == pad1 and cur1 == pad0
 
     @classmethod
-    def element_direction(cls, left, right):
+    def element_direction(
+        cls, left: Gst.Element, right: Gst.Element
+    ) -> PipelineParser.Direction:
         for sink_pad in left.sinkpads:
             for src_pad in right.srcpads:
                 if cls._is_linked_pads(src_pad, sink_pad):
@@ -90,11 +101,11 @@ class PipelineParser:
         return cls.Direction.Unlinked
 
     @staticmethod
-    def _quote_value(val):
+    def _quote_value(val: Any) -> str:
         return shlex.quote(str(val))
 
     @classmethod
-    def format_value(cls, val):
+    def format_value(cls, val: Any) -> Any:
         if isinstance(val, int):
             ret = int(val)  # bools, enums
         elif isinstance(val, float):
@@ -108,7 +119,7 @@ class PipelineParser:
         return ret
 
     @classmethod
-    def force_exclude_property(cls, prop, val=None):
+    def force_exclude_property(cls, prop: GObject.ParamSpec, val: Any = None) -> bool:
         if not (prop.flags & cls._PARAMFLAG_READABLE):
             return True
         if not (prop.flags & cls._PARAMFLAG_WRITABLE):
@@ -118,7 +129,9 @@ class PipelineParser:
         return False
 
     @classmethod
-    def _filtered_properties(cls, go, discard_props):
+    def _filtered_properties(
+        cls, go: Gst.Object, discard_props: set[str]
+    ) -> dict[str, Any]:
         if ALL_MARKER in discard_props:
             return {}
         ret = {}
@@ -143,7 +156,9 @@ class PipelineParser:
         return ret
 
     @classmethod
-    def _find_linked_src_pad(cls, node, succ):
+    def _find_linked_src_pad(
+        cls, node: Gst.Element, succ: Gst.Element
+    ) -> Gst.Pad | None:
         for src_pad in node.srcpads:
             for sink_pad in succ.sinkpads:
                 if cls._is_linked_pads(src_pad, sink_pad):
@@ -151,14 +166,22 @@ class PipelineParser:
         return None
 
     @classmethod
-    def _find_linked_sink_pad(cls, node, pred):
+    def _find_linked_sink_pad(
+        cls, node: Gst.Element, pred: Gst.Element
+    ) -> Gst.Pad | None:
         for sink_pad in node.sinkpads:
             for src_pad in pred.srcpads:
                 if cls._is_linked_pads(src_pad, sink_pad):
                     return sink_pad
         return None
 
-    def _source_reference(self, go, level, base_indent, succ=None):
+    def _source_reference(
+        self,
+        go: Gst.Element,
+        level: int,
+        base_indent: str,
+        succ: Gst.Element | None = None,
+    ) -> list[str]:
         factory = go.get_factory()
         if (
             succ is not None
@@ -171,11 +194,13 @@ class PipelineParser:
         return [f"{base_indent * level}{go.name}. \\"]
 
     @classmethod
-    def _sink_reference(cls, go, level, base_indent, pad_idx):
+    def _sink_reference(
+        cls, go: Gst.Element, level: int, base_indent: str, pad_idx: int
+    ) -> list[str]:
         ret = [f"{base_indent * level}! {go.name}.{go.sinkpads[pad_idx].name} \\"]
         return ret
 
-    def _flatten_object(self, obj, out):
+    def _flatten_object(self, obj: Gst.Object, out: list[Gst.Element]) -> None:
         if isinstance(obj, Gst.Bin):
             factory = obj.get_factory()
             if (
@@ -194,11 +219,11 @@ class PipelineParser:
             return
         out.append(obj)
 
-    def _flatten_seq(self, seq, out):
+    def _flatten_seq(self, seq: list | tuple, out: list[Gst.Element]) -> None:
         for obj in seq:
             self._flatten_object(obj, out)
 
-    def _flatten(self, obj):
+    def _flatten(self, obj: Gst.Object | list | tuple) -> list[Gst.Element]:
         ret = []
         if isinstance(obj, (list, tuple)):
             self._flatten_seq(obj, ret)
@@ -210,7 +235,7 @@ class PipelineParser:
             )
         return ret
 
-    def _generate_graph(self, obj):
+    def _generate_graph(self, obj: Gst.Object) -> networkx.DiGraph:
         ret = networkx.DiGraph()
         elements = self._flatten(obj)
         ret.add_nodes_from(elements)
@@ -225,10 +250,17 @@ class PipelineParser:
                     ret.add_edge(item1, item0)
         return ret
 
-    def is_capsfilter(self, element):
+    def is_capsfilter(self, element: Gst.Element) -> bool:
         return element.__class__.__name__ == "GstCapsFilter"
 
-    def _format_element(self, element, level, base_indent, prop_indent, pre_link):
+    def _format_element(
+        self,
+        element: Gst.Element,
+        level: int,
+        base_indent: str,
+        prop_indent: str,
+        pre_link: bool,
+    ) -> list[str]:
         indent = base_indent * level
         link_symbol = f"{'! ' if pre_link else ''}"
         if self.is_capsfilter(element):
@@ -255,7 +287,9 @@ class PipelineParser:
         return ret
 
     @classmethod
-    def _sorted_successors(cls, node, succs):
+    def _sorted_successors(
+        cls, node: Gst.Element, succs: tuple[Gst.Element, ...]
+    ) -> list[Gst.Element]:
         def src_pad_index(succ):
             for idx, src_pad in enumerate(node.srcpads):
                 for sink_pad in succ.sinkpads:
@@ -266,8 +300,14 @@ class PipelineParser:
         return sorted(succs, key=src_pad_index)
 
     def _format_successors(
-        self, node, graph, level, base_elem_indent, prop_indent, multisinks
-    ):
+        self,
+        node: Gst.Element,
+        graph: networkx.DiGraph,
+        level: int,
+        base_elem_indent: str,
+        prop_indent: str,
+        multisinks: dict[Gst.Element, list[int]],
+    ) -> list[str]:
         ret = []
         succs = tuple(graph.successors(node))
         if len(succs) > 1:
@@ -299,14 +339,14 @@ class PipelineParser:
 
     def _format_node(
         self,
-        node,
-        graph,
-        level,
-        base_elem_indent,
-        prop_indent,
-        pre_link,
-        multisinks,
-    ):
+        node: Gst.Element,
+        graph: networkx.DiGraph,
+        level: int,
+        base_elem_indent: str,
+        prop_indent: str,
+        pre_link: bool,
+        multisinks: dict[Gst.Element, list[int]],
+    ) -> list[str]:
         ret = []
         levels = []
         preds = tuple(graph.predecessors(node))
@@ -352,12 +392,12 @@ class PipelineParser:
 
     def gst_launch(
         self,
-        gst_object_root,
-        level=0,
-        element_indent=None,
-        property_indent=None,
-        command=None,
-    ):
+        gst_object_root: Gst.Object,
+        level: int = 0,
+        element_indent: str | None = None,
+        property_indent: str | None = None,
+        command: str | None = None,
+    ) -> str:
         if not isinstance(gst_object_root, Gst.Object):
             raise TypeError(
                 f"Expected Gst.Object, got {type(gst_object_root).__name__}"
