@@ -31,7 +31,7 @@ class RegistryAccess:
         self.invalidate_caches()
 
     def contents(self, force=False):
-        if not self.__contents or force:
+        if self.__contents is None or force:
             registry = Gst.Registry.get()
             plugin_names = sorted(e.get_name() for e in registry.get_plugin_list())
             self.__contents = {
@@ -49,7 +49,7 @@ class RegistryAccess:
         return self.__contents
 
     def element_classes_dict(self, force=False):
-        if not self.__element_classes_dict or force:
+        if self.__element_classes_dict is None or force:
             failed_classes = []
             items = []
             self.__element_classes_dict = {}
@@ -59,9 +59,15 @@ class RegistryAccess:
             for name, obj in items:
                 if isinstance(obj, Gst.ElementFactory):
                     try:
-                        self.__element_classes_dict[name] = obj.make(name).__class__
+                        pytype = obj.get_element_type().pytype
+                        if pytype is None:
+                            raise TypeError
+                        self.__element_classes_dict[name] = pytype
                     except Exception:
-                        failed_classes.append(name)
+                        try:
+                            self.__element_classes_dict[name] = obj.make(name).__class__
+                        except Exception:
+                            failed_classes.append(name)
             self.__failed_classes = tuple(failed_classes)
         return self.__element_classes_dict
 
@@ -70,7 +76,7 @@ class RegistryAccess:
         return self.__failed_classes
 
     def element_classes(self, force=False, exclude_containers=True):
-        if not self.__element_classes or force:
+        if self.__element_classes is None or force:
             self.__element_classes = tuple(
                 item for item in self.element_classes_dict(force=force).values()
             )

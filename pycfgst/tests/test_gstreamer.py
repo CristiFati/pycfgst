@@ -1,4 +1,5 @@
 import os
+import platform
 import sys
 import unittest
 
@@ -14,6 +15,13 @@ try:
 except (ImportError, ValueError):
     HAS_GI = False
 
+
+HAS_NVDS = HAS_GI and (
+    os.environ.get("DS_VERSION") is not None
+    and os.path.isdir("/opt/nvidia/deepstream")
+    and platform.architecture()[-1][:3].upper()
+    == "ELF"  # Linux container on Mac not working
+)
 
 SAMPLE_VIDEO = os.environ.get("SAMPLE_VIDEO", "/media/videos/sample_1080p_h264.mp4")
 
@@ -120,7 +128,7 @@ class PipelineParserGenericTestCase(_GStreamerTestCase):
 
     def test_double_properties(self):
         volume = 1.33
-        pipeline_str = f"audiotestsrc ! volume volume={volume} ! autoaudiosink"
+        pipeline_str = f"audiotestsrc ! volume volume={volume} ! fakesink"
         pipeline = Gst.parse_launch(pipeline_str)
         self.assertIsNotNone(pipeline)
         pipeline.set_state(Gst.State.PAUSED)
@@ -217,7 +225,7 @@ class PipelineParserBinTestCase(_GStreamerTestCase):
     def test_one_bin(self):
         caps_str = "video/x-raw,width=960,height=540"
         pipeline_str = (
-            f'videotestsrc pattern=18 ! videoscale ! "{caps_str}" ! autovideosink'
+            f'videotestsrc pattern=18 ! videoscale ! "{caps_str}" ! fakevideosink'
         )
         pipeline = Gst.Pipeline.new("test-one-bin")
         src = self.create_element("videotestsrc", {"pattern": 18})
@@ -231,7 +239,7 @@ class PipelineParserBinTestCase(_GStreamerTestCase):
                 ),
             ],
         )
-        sink = self.create_element("autovideosink")
+        sink = self.create_element("fakevideosink")
         for elem in (src, scale_bin, sink):
             pipeline.add(elem)
         src.link(scale_bin)
@@ -257,4 +265,36 @@ class PipelineParserBinTestCase(_GStreamerTestCase):
         # self.save_dot(pipeline, f"test_playbin_{ts_str()}.dot")
         # print(f"Output: {pstr}")
         self.assertTrue(self.split_output_string(pstr)[0].startswith("playbin"))
+        pipeline.set_state(Gst.State.NULL)
+
+
+@unittest.skipUnless(HAS_NVDS, "NVidia DeepStream not available")
+class PipelineParserNVidiaTestCase(_GStreamerTestCase):
+
+    def test_nvvideoconvert(self):
+        pipeline_str = "videotestsrc pattern=18 ! nvvideoconvert ! fakevideosink"
+        pipeline = Gst.parse_launch(pipeline_str)
+        self.assertIsNotNone(pipeline)
+        pipeline.set_state(Gst.State.PAUSED)
+        pparser = self.PipelineParser()
+        pstr = pparser.gst_launch(pipeline)
+        self.assertValidGstLaunch(pstr)
+        # print(f"Output: {pstr}")
+        self.assertTrue(self.compare_pipeline_strings(pipeline_str, pstr))
+        pipeline.set_state(Gst.State.NULL)
+
+    @unittest.skipUnless(os.path.isfile(SAMPLE_VIDEO), "sample video not available")
+    def test_nvv4ldecoder(self):
+        pipeline_str = (
+            f"filesrc location={SAMPLE_VIDEO} ! qtdemux ! h264parse"
+            " ! nvv4l2decoder ! nvvideoconvert ! fakevideosink"
+        )
+        pipeline = Gst.parse_launch(pipeline_str)
+        self.assertIsNotNone(pipeline)
+        pipeline.set_state(Gst.State.PAUSED)
+        pparser = self.PipelineParser()
+        pstr = pparser.gst_launch(pipeline)
+        self.assertValidGstLaunch(pstr)
+        # print(f"Output: {pstr}")
+        self.assertTrue(self.compare_pipeline_strings(pipeline_str, pstr))
         pipeline.set_state(Gst.State.NULL)

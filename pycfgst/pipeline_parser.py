@@ -205,7 +205,9 @@ class PipelineParser:
         elif isinstance(obj, Gst.Object):
             self._flatten_object(obj, ret)
         else:
-            print(f"Illegal object: {obj}")
+            raise TypeError(
+                f"Expected Gst.Object or list/tuple, got {type(obj).__name__}"
+            )
         return ret
 
     def _generate_graph(self, obj):
@@ -263,6 +265,38 @@ class PipelineParser:
 
         return sorted(succs, key=src_pad_index)
 
+    def _format_successors(
+        self, node, graph, level, base_elem_indent, prop_indent, multisinks
+    ):
+        ret = []
+        succs = tuple(graph.successors(node))
+        if len(succs) > 1:
+            for succ in self._sorted_successors(node, succs):
+                ret += self._source_reference(node, level, base_elem_indent, succ)
+                ret += self._format_node(
+                    succ,
+                    graph,
+                    level + 1,
+                    base_elem_indent,
+                    prop_indent,
+                    True,
+                    multisinks,
+                )
+        elif len(succs) == 1:
+            factory = node.get_factory()
+            if factory and factory.name in self._config.explicit_request_pads:
+                ret += self._source_reference(node, level, base_elem_indent, succs[0])
+            ret += self._format_node(
+                succs[0],
+                graph,
+                level,
+                base_elem_indent,
+                prop_indent,
+                True,
+                multisinks,
+            )
+        return ret
+
     def _format_node(
         self,
         node,
@@ -298,81 +332,22 @@ class PipelineParser:
                 ):
                     indent = base_elem_indent * level
                     ret.append(f"{indent}! {node.name}.{sink_pad.name} \\")
-                    ret += self._format_element(
-                        node, level, base_elem_indent, prop_indent, False
-                    )
-                else:
-                    ret += self._format_element(
-                        node, level, base_elem_indent, prop_indent, pre_link
-                    )
-            else:
-                ret += self._format_element(
-                    node, level, base_elem_indent, prop_indent, pre_link
-                )
-            succs = tuple(graph.successors(node))
-            if len(succs) > 1:
-                for succ in self._sorted_successors(node, succs):
-                    ret += self._source_reference(node, level, base_elem_indent, succ)
-                    ret += self._format_node(
-                        succ,
-                        graph,
-                        level + 1,
-                        base_elem_indent,
-                        prop_indent,
-                        True,
-                        multisinks,
-                    )
-            elif len(succs) == 1:
-                factory = node.get_factory()
-                if factory and factory.name in self._config.explicit_request_pads:
-                    ret += self._source_reference(
-                        node, level, base_elem_indent, succs[0]
-                    )
-                ret += self._format_node(
-                    succs[0],
-                    graph,
-                    level,
-                    base_elem_indent,
-                    prop_indent,
-                    True,
-                    multisinks,
-                )
+                    pre_link = False
+            ret += self._format_element(
+                node, level, base_elem_indent, prop_indent, pre_link
+            )
+            ret += self._format_successors(
+                node, graph, level, base_elem_indent, prop_indent, multisinks
+            )
         if 1 < len(preds) == len(levels):
             ret += self._sink_reference(node, level, base_elem_indent, len(levels) - 1)
             elem_level = min(levels)
             ret += self._format_element(
                 node, elem_level, base_elem_indent, prop_indent, False
             )
-            succs = tuple(graph.successors(node))
-            if len(succs) > 1:
-                for succ in self._sorted_successors(node, succs):
-                    ret += self._source_reference(
-                        node, elem_level, base_elem_indent, succ
-                    )
-                    ret += self._format_node(
-                        succ,
-                        graph,
-                        elem_level + 1,
-                        base_elem_indent,
-                        prop_indent,
-                        True,
-                        multisinks,
-                    )
-            elif len(succs) == 1:
-                factory = node.get_factory()
-                if factory and factory.name in self._config.explicit_request_pads:
-                    ret += self._source_reference(
-                        node, elem_level, base_elem_indent, succs[0]
-                    )
-                ret += self._format_node(
-                    succs[0],
-                    graph,
-                    elem_level,
-                    base_elem_indent,
-                    prop_indent,
-                    True,
-                    multisinks,
-                )
+            ret += self._format_successors(
+                node, graph, elem_level, base_elem_indent, prop_indent, multisinks
+            )
         return ret
 
     def gst_launch(

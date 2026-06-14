@@ -1,7 +1,6 @@
 import dataclasses
 import fnmatch
 import sys
-import traceback
 
 try:
     from importlib.resources import files
@@ -176,13 +175,9 @@ class PipelineParserConfig:
 
     @staticmethod
     def _load_defaults():
-        try:
-            # Might be moved into a different (pycfgst_config) package / repository
-            data = files("pycfgst") / "pipeline_parser_defaults.yaml"
-            return yaml.safe_load(data.read_text()) or {}
-        except Exception:
-            traceback.print_exc()
-            return {}
+        # Might be moved into a different (pycfgst_config) package / repository
+        data = files("pycfgst") / "pipeline_parser_defaults.yaml"
+        return yaml.safe_load(data.read_text()) or {}
 
     @staticmethod
     def _load(path):

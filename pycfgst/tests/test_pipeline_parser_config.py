@@ -325,8 +325,14 @@ class TraversedBinsTestCase(unittest.TestCase):
 
     def test_user_empty_falls_back_to_default(self):
         cfg = PipelineParserConfig.__new__(PipelineParserConfig)
+        cfg._merge = True
+        cfg._merge_policy = PipelineParserConfig.MERGE_POLICY_SPECIFICITY
+        cfg._defaults_classified = _classify_entries({})
         cfg._default_traverse_bins = {"default_bin"}
+        cfg._default_explicit_request_pads = set()
+        cfg._user_classified = None
         cfg._user_traverse_bins = set()
+        cfg._user_explicit_request_pads = set()
         self.assertEqual(cfg.traverse_bins, {"default_bin"})
 
 
