@@ -1,4 +1,5 @@
 import enum
+import shlex
 import sys
 import traceback
 
@@ -24,7 +25,6 @@ class PipelineParser:
     DEFAULT_PROPERTY_INDENT = " " * 4
     DEFAULT_GSTLAUNCH = "gst-launch-1.0 -e"  # v
 
-    _SHELL_CHARACTERS = ("(", ")", " ", ";")
     _PARAMFLAG_READABLE = int(GObject.ParamFlags.READABLE)
     _PARAMFLAG_WRITABLE = int(GObject.ParamFlags.WRITABLE)
     _TRAVERSED_FACTORIES = ("bin", "pipeline")
@@ -89,21 +89,9 @@ class PipelineParser:
                     return cls.Direction.LeftRight
         return cls.Direction.Unlinked
 
-    @classmethod
-    def _shell_quote_item(cls, s):
-        if not isinstance(s, str):
-            return s
-        if (s.startswith('"') and s.endswith('"')) or (
-            s.startswith("'") and s.endswith("'")
-        ):
-            return s
-        if not any(e in s for e in cls._SHELL_CHARACTERS):
-            return s
-        return f'"{s}"'
-
-    @classmethod
-    def _quote_value(cls, val):
-        return cls._shell_quote_item(str(val))
+    @staticmethod
+    def _quote_value(val):
+        return shlex.quote(str(val))
 
     @classmethod
     def format_value(cls, val):
@@ -221,7 +209,7 @@ class PipelineParser:
         if self.is_capsfilter(element):
             return [
                 f"{indent}{link_symbol}"
-                f"{self._shell_quote_item(element.get_property('caps').to_string())} \\"
+                f"{self._quote_value(element.get_property('caps').to_string())} \\"
             ]
         factory_name = element.get_factory().name
         resolved = self._config.resolve_filters(factory_name)

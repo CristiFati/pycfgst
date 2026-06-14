@@ -89,6 +89,8 @@ class _GStreamerTestCase(unittest.TestCase):
             i = inl.find(" ") if i == -1 else i
             ine = inl if i == -1 else inl[:i].strip('"')
             outl = outls[idx]
+            if outl.startswith("'"):
+                outl = outl[1:]
             i = outl.find(",")
             i = outl.find(" ") if i == -1 else i
             oute = outl if i == -1 else outl[:i].strip('"')
