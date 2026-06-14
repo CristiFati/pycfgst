@@ -92,4 +92,16 @@ excluded_property_filter:
     qtimmux:
         - "!name"
 
-traversed_bins: []  # Experimental
+explicit_request_pads:
+    - nvcompositor
+    - nvmixer
+    - nvmultistreamtiler
+    - nvstreamdemux
+    - nvstreammux
+    - nvtee
+    - nvtracker
+    - qtimcomposer
+    - qtimdemux
+    - qtimmux
+
+traversed_bins:  # Experimental

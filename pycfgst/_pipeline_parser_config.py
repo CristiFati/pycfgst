@@ -133,6 +133,7 @@ class PipelineParserConfig:
 
     _CONFIG_KEY_PROPERTIES = "excluded_property_filter"
     _CONFIG_KEY_TRAVERSE_BINS = "traversed_bins"
+    _CONFIG_KEY_EXPLICIT_REQUEST_PADS = "explicit_request_pads"
 
     def __init__(
         self, user_config=None, merge=True, merge_policy=MERGE_POLICY_SPECIFICITY
@@ -148,8 +149,12 @@ class PipelineParserConfig:
         self._defaults_classified = _classify_entries(
             _extract_section(defaults_raw, self._CONFIG_KEY_PROPERTIES, {})
         )
-        self._default_traverse_bins = list(
+        self._default_traverse_bins = set(
             _extract_section(defaults_raw, self._CONFIG_KEY_TRAVERSE_BINS, []) or []
+        )
+        self._default_explicit_request_pads = set(
+            _extract_section(defaults_raw, self._CONFIG_KEY_EXPLICIT_REQUEST_PADS, [])
+            or []
         )
 
         if user_config:
@@ -157,12 +162,17 @@ class PipelineParserConfig:
             self._user_classified = _classify_entries(
                 _extract_section(user_raw, self._CONFIG_KEY_PROPERTIES, {})
             )
-            self._user_traverse_bins = list(
+            self._user_traverse_bins = set(
                 _extract_section(user_raw, self._CONFIG_KEY_TRAVERSE_BINS, []) or []
+            )
+            self._user_explicit_request_pads = set(
+                _extract_section(user_raw, self._CONFIG_KEY_EXPLICIT_REQUEST_PADS, [])
+                or []
             )
         else:
             self._user_classified = None
-            self._user_traverse_bins = []
+            self._user_traverse_bins = set()
+            self._user_explicit_request_pads = set()
 
     @staticmethod
     def _load_defaults():
@@ -188,6 +198,8 @@ class PipelineParserConfig:
             )
         else:
             ep, pp = _resolve_single_source(self._defaults_classified, element_name)
+        if element_name in self.explicit_request_pads:
+            ep.discard("name")
         return ResolvedFilter(
             element_properties=ep,
             pad_properties=pp,
@@ -198,6 +210,12 @@ class PipelineParserConfig:
         if self._user_traverse_bins:
             return self._user_traverse_bins
         return self._default_traverse_bins
+
+    @property
+    def explicit_request_pads(self):
+        if self._user_explicit_request_pads:
+            return self._user_explicit_request_pads
+        return self._default_explicit_request_pads
 
 
 if __name__ == "__main__":

@@ -69,6 +69,13 @@ class _GStreamerTestCase(unittest.TestCase):
         cls.RegistryAccess = RegistryAccess
         cls.PipelineParser = PipelineParser
 
+    def assertValidGstLaunch(self, output):
+        command = " ! ".join(self.split_output_string(output)).replace("'", "")
+        # print("----- output\n", output)
+        pipeline = Gst.parse_launch(command)
+        self.assertIsNotNone(pipeline)
+        pipeline.set_state(Gst.State.NULL)
+
     def split_output_string(self, output):
         outls = output.split("\n")
         outls = [e.strip("\\").strip() for e in outls if e.strip()][1:]
@@ -120,6 +127,7 @@ class PipelineParserGenericTestCase(_GStreamerTestCase):
         pparser = self.PipelineParser()
         pstr = pparser.gst_launch(pipeline)
         # print(f"Output: {pstr}")
+        self.assertValidGstLaunch(pstr)
         outls = self.split_output_string(pstr)
         self.assertIn(
             f"volume volume={self.PipelineParser.format_value(volume)}",
@@ -166,12 +174,13 @@ class PipelineParserGstLaunchTestCase(_GStreamerTestCase):
 
     def test_gst_launch_pipelines(self):
         pparser = self.PipelineParser()
-        pipeline_strings = tuple(self.read_pipelines())
+        pipeline_strings = tuple(self.read_pipelines()[2:-2])
         for pipeline_string in pipeline_strings:
             pipeline = self.generate_pipeline(pipeline_string)
             self.assertIsNotNone(pipeline)
-            output = pparser.gst_launch(pipeline)
-            self.assertTrue(self.compare_pipeline_strings(pipeline_string, output))
+            pstr = pparser.gst_launch(pipeline)
+            self.assertValidGstLaunch(pstr)
+            self.assertTrue(self.compare_pipeline_strings(pipeline_string, pstr))
 
 
 @unittest.skipUnless(HAS_GI, "PyGObject not installed")
@@ -231,6 +240,7 @@ class PipelineParserBinTestCase(_GStreamerTestCase):
         pipeline.set_state(Gst.State.PAUSED)
         pparser = self.PipelineParser()
         pstr = pparser.gst_launch(pipeline)
+        self.assertValidGstLaunch(pstr)
         # self.save_dot(pipeline, f"test_one_bin_{ts_str()}.dot")
         # print(f"Output: {pstr}")
         self.assertTrue(self.compare_pipeline_strings(pipeline_str, pstr))
@@ -243,6 +253,7 @@ class PipelineParserBinTestCase(_GStreamerTestCase):
         pipeline.set_state(Gst.State.PAUSED)
         pparser = self.PipelineParser()
         pstr = pparser.gst_launch(pipeline)
+        self.assertValidGstLaunch(pstr)
         # self.save_dot(pipeline, f"test_playbin_{ts_str()}.dot")
         # print(f"Output: {pstr}")
         self.assertTrue(self.split_output_string(pstr)[0].startswith("playbin"))

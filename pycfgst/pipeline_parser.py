@@ -143,9 +143,32 @@ class PipelineParser:
         return ret
 
     @classmethod
-    def _source_reference(cls, go, level, base_indent):
-        ret = [f"{base_indent * level}{go.name}. \\"]
-        return ret
+    def _find_linked_src_pad(cls, node, succ):
+        for src_pad in node.srcpads:
+            for sink_pad in succ.sinkpads:
+                if cls._is_linked_pads(src_pad, sink_pad):
+                    return src_pad
+        return None
+
+    @classmethod
+    def _find_linked_sink_pad(cls, node, pred):
+        for sink_pad in node.sinkpads:
+            for src_pad in pred.srcpads:
+                if cls._is_linked_pads(src_pad, sink_pad):
+                    return sink_pad
+        return None
+
+    def _source_reference(self, go, level, base_indent, succ=None):
+        factory = go.get_factory()
+        if (
+            succ is not None
+            and factory
+            and factory.name in self._config.explicit_request_pads
+        ):
+            pad = self._find_linked_src_pad(go, succ)
+            if pad and pad.get_pad_template().presence == Gst.PadPresence.REQUEST:
+                return [f"{base_indent * level}{go.name}.{pad.name} \\"]
+        return [f"{base_indent * level}{go.name}. \\"]
 
     @classmethod
     def _sink_reference(cls, go, level, base_indent, pad_idx):
@@ -261,13 +284,35 @@ class PipelineParser:
                     node, level, base_elem_indent, len(levels) - 1
                 )
         else:
-            ret += self._format_element(
-                node, level, base_elem_indent, prop_indent, pre_link
-            )
+            factory = node.get_factory()
+            if (
+                pre_link
+                and preds
+                and factory
+                and factory.name in self._config.explicit_request_pads
+            ):
+                sink_pad = self._find_linked_sink_pad(node, preds[0])
+                if (
+                    sink_pad
+                    and sink_pad.get_pad_template().presence == Gst.PadPresence.REQUEST
+                ):
+                    indent = base_elem_indent * level
+                    ret.append(f"{indent}! {node.name}.{sink_pad.name} \\")
+                    ret += self._format_element(
+                        node, level, base_elem_indent, prop_indent, False
+                    )
+                else:
+                    ret += self._format_element(
+                        node, level, base_elem_indent, prop_indent, pre_link
+                    )
+            else:
+                ret += self._format_element(
+                    node, level, base_elem_indent, prop_indent, pre_link
+                )
             succs = tuple(graph.successors(node))
             if len(succs) > 1:
                 for succ in self._sorted_successors(node, succs):
-                    ret += self._source_reference(node, level, base_elem_indent)
+                    ret += self._source_reference(node, level, base_elem_indent, succ)
                     ret += self._format_node(
                         succ,
                         graph,
@@ -278,6 +323,11 @@ class PipelineParser:
                         multisinks,
                     )
             elif len(succs) == 1:
+                factory = node.get_factory()
+                if factory and factory.name in self._config.explicit_request_pads:
+                    ret += self._source_reference(
+                        node, level, base_elem_indent, succs[0]
+                    )
                 ret += self._format_node(
                     succs[0],
                     graph,
@@ -296,7 +346,9 @@ class PipelineParser:
             succs = tuple(graph.successors(node))
             if len(succs) > 1:
                 for succ in self._sorted_successors(node, succs):
-                    ret += self._source_reference(node, elem_level, base_elem_indent)
+                    ret += self._source_reference(
+                        node, elem_level, base_elem_indent, succ
+                    )
                     ret += self._format_node(
                         succ,
                         graph,
@@ -307,6 +359,11 @@ class PipelineParser:
                         multisinks,
                     )
             elif len(succs) == 1:
+                factory = node.get_factory()
+                if factory and factory.name in self._config.explicit_request_pads:
+                    ret += self._source_reference(
+                        node, elem_level, base_elem_indent, succs[0]
+                    )
                 ret += self._format_node(
                     succs[0],
                     graph,

@@ -24,9 +24,32 @@ gst-launch-1.0 -e \
       preset=4 \
   ! autovideosink
 
+# Branch (1)
+gst-launch-1.0 -e \
+  videotestsrc \
+      pattern=18 \
+      flip=1 \
+  ! "video/x-raw,width=960,height=540" \
+  ! tee \
+      name=t0 \
+    ! queue \
+    ! autovideosink
+
+# Comp
+gst-launch-1.0 -e \
+  videotestsrc \
+      pattern=18\
+      flip=1 \
+  ! "video/x-raw,width=960,height=540" \
+  ! compositor \
+      name=comp0 \
+  ! autovideosink
+
 # Branch (2)
 gst-launch-1.0 -e \
-  videotestsrc pattern=18 flip=1 \
+  videotestsrc \
+      pattern=18 \
+      flip=1 \
   ! "video/x-raw,width=960,height=540" \
   ! tee \
       name=t0 \
