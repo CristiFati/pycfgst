@@ -1,3 +1,5 @@
+"""GStreamer pipeline to gst-launch-1.0 command string conversion."""
+
 from __future__ import annotations
 
 import enum
@@ -25,6 +27,7 @@ __all__ = ("PipelineParser",)
 
 
 class PipelineParser:
+    """Convert a GStreamer pipeline into a gst-launch-1.0 command string."""
 
     DEFAULT_ELEMENT_INDENT = " " * 2
     DEFAULT_PROPERTY_INDENT = " " * 4
@@ -48,6 +51,7 @@ class PipelineParser:
         merge: bool = True,
         merge_policy: str = PipelineParserConfig.MERGE_POLICY_SPECIFICITY,
     ) -> None:
+        """Load configuration from a YAML file."""
         self._config = PipelineParserConfig(
             user_config=user_config,
             merge=merge,
@@ -90,6 +94,7 @@ class PipelineParser:
     def element_direction(
         cls, left: Gst.Element, right: Gst.Element
     ) -> PipelineParser.Direction:
+        """Determine the link direction between two elements."""
         for sink_pad in left.sinkpads:
             for src_pad in right.srcpads:
                 if cls._is_linked_pads(src_pad, sink_pad):
@@ -106,6 +111,7 @@ class PipelineParser:
 
     @classmethod
     def format_value(cls, val: Any) -> Any:
+        """Normalize a GStreamer property value for gst-launch output."""
         if isinstance(val, int):
             ret = int(val)  # bools, enums
         elif isinstance(val, float):
@@ -120,6 +126,7 @@ class PipelineParser:
 
     @classmethod
     def force_exclude_property(cls, prop: GObject.ParamSpec, val: Any = None) -> bool:
+        """Return True if the property should be excluded regardless of config."""
         if not (prop.flags & cls._PARAMFLAG_READABLE):
             return True
         if not (prop.flags & cls._PARAMFLAG_WRITABLE):
@@ -251,6 +258,7 @@ class PipelineParser:
         return ret
 
     def is_capsfilter(self, element: Gst.Element) -> bool:
+        """Return True if the element is a capsfilter (emitted as inline caps)."""
         return element.__class__.__name__ == "GstCapsFilter"
 
     def _format_element(
@@ -398,6 +406,7 @@ class PipelineParser:
         property_indent: str | None = None,
         command: str | None = None,
     ) -> str:
+        """Generate a gst-launch-1.0 command string from a pipeline or bin."""
         if not isinstance(gst_object_root, Gst.Object):
             raise TypeError(
                 f"Expected Gst.Object, got {type(gst_object_root).__name__}"

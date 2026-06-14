@@ -1,3 +1,5 @@
+"""YAML-driven property filter configuration for the pipeline parser."""
+
 from __future__ import annotations
 
 import dataclasses

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+"""GStreamer plugin registry inspection and element class discovery."""
 
 from __future__ import annotations
 
@@ -21,6 +22,8 @@ __all__ = ("RegistryAccess",)
 
 
 class RegistryAccess:
+    """Access to the GStreamer plugin registry: element factories and their classes."""
+
     def __init__(self) -> None:
         if not Gst.is_initialized():
             print("Gst engine is not initialized. Initializing.")
@@ -33,6 +36,7 @@ class RegistryAccess:
         self.invalidate_caches()
 
     def contents(self, force: bool = False) -> dict[str, dict[str, Gst.PluginFeature]]:
+        """Return plugin features grouped by plugin name."""
         if self.__contents is None or force:
             registry = Gst.Registry.get()
             plugin_names = sorted(e.get_name() for e in registry.get_plugin_list())
@@ -51,6 +55,7 @@ class RegistryAccess:
         return self.__contents
 
     def element_classes_dict(self, force: bool = False) -> dict[str, type]:
+        """Return a mapping of element factory names to their Python classes."""
         if self.__element_classes_dict is None or force:
             failed_classes = []
             items = []
@@ -75,11 +80,13 @@ class RegistryAccess:
 
     @property
     def failed_classes(self) -> tuple[str, ...]:
+        """Factory names whose Python class could not be resolved."""
         return self.__failed_classes
 
     def element_classes(
         self, force: bool = False, exclude_containers: bool = True
     ) -> tuple[type, ...]:
+        """Return element Python classes, optionally excluding Bin and Pipeline."""
         if self.__element_classes is None or force:
             self.__element_classes = tuple(
                 item for item in self.element_classes_dict(force=force).values()
@@ -95,6 +102,7 @@ class RegistryAccess:
         )
 
     def invalidate_caches(self) -> None:
+        """Clear all cached data, forcing a fresh registry scan on next access."""
         self.__contents = None
         self.__element_classes_dict = None
         self.__element_classes = None
