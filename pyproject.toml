@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pycfgst"
+dynamic = ["version"]
+
+description = "PyCFGst (Cristi Fati's GStreamer utilities for Python) - pipeline parsing and registry access"
+readme = "README.md"
+requires-python = ">=3.7"
+license = "MIT"
+authors = [
+    { name = "Cristi Fati", email = "fati_utcluj@yahoo.com" },
+]
+maintainers = [
+    { name = "Cristi Fati", email = "fati_utcluj@yahoo.com" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX",
+    "Operating System :: Unix",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
+    "Topic :: Multimedia :: Sound/Audio",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Software Development",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "importlib_resources; python_version < '3.9'",
+    "PyGObject",
+    "PyYAML",
+    "networkx",
+    "pycfutils",
+]
+
+[project.urls]
+Homepage = "https://github.com/CristiFati/pycfgst"
+Download = "https://pypi.org/project/pycfgst"
+
+[tool.setuptools.dynamic]
+version = {attr = "pycfgst.version.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["pycfgst*"]
+
+[tool.setuptools.package-data]
+pycfgst = ["*.yaml"]
+"pycfgst.tests" = ["data/*.txt"]
