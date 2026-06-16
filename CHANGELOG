@@ -45,7 +45,11 @@ C         H         A         N        G        E         L         O         G
 
 [vTBR]
 
-[v2026.06.15]
+[v2026.06.16]
+    - Fix config default ignore when merging top level sequences
+      @CristiFati, 260616
+    - Fixes, improvements, build files
+      @CristiFati, 260615
     - Version and build files
     - Explicit request pad names
     - Shell quoting
@@ -67,4 +71,4 @@ C         H         A         N        G        E         L         O         G
     - PGO dummy mock
       @CristiFati, 240512
     - Registry access
-      @CristiFato, 240510
+      @CristiFati, 240510
