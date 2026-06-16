@@ -1,4 +1,4 @@
-"""YAML-driven property filter configuration for the pipeline parser."""
+"""YAML-driven configuration for the pipeline parser."""
 
 from __future__ import annotations
 
@@ -215,12 +215,19 @@ class PipelineParserConfig:
     @property
     def traverse_bins(self) -> set[str]:
         if self._user_traverse_bins:
+            if self._merge:
+                return self._user_traverse_bins | self._default_traverse_bins
             return self._user_traverse_bins
         return self._default_traverse_bins
 
     @property
     def explicit_request_pads(self) -> set[str]:
         if self._user_explicit_request_pads:
+            if self._merge:
+                return (
+                    self._user_explicit_request_pads
+                    | self._default_explicit_request_pads
+                )
             return self._user_explicit_request_pads
         return self._default_explicit_request_pads
 

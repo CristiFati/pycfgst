@@ -323,6 +323,30 @@ class TraversedBinsTestCase(unittest.TestCase):
         finally:
             os.unlink(tmp_path)
 
+    def test_user_merges_with_default(self):
+        cfg = PipelineParserConfig.__new__(PipelineParserConfig)
+        cfg._merge = True
+        cfg._merge_policy = PipelineParserConfig.MERGE_POLICY_SPECIFICITY
+        cfg._defaults_classified = _classify_entries({})
+        cfg._default_traverse_bins = {"default_bin"}
+        cfg._default_explicit_request_pads = set()
+        cfg._user_classified = None
+        cfg._user_traverse_bins = {"user_bin"}
+        cfg._user_explicit_request_pads = set()
+        self.assertEqual(cfg.traverse_bins, {"default_bin", "user_bin"})
+
+    def test_user_overrides_default_no_merge(self):
+        cfg = PipelineParserConfig.__new__(PipelineParserConfig)
+        cfg._merge = False
+        cfg._merge_policy = PipelineParserConfig.MERGE_POLICY_SPECIFICITY
+        cfg._defaults_classified = _classify_entries({})
+        cfg._default_traverse_bins = {"default_bin"}
+        cfg._default_explicit_request_pads = set()
+        cfg._user_classified = None
+        cfg._user_traverse_bins = {"user_bin"}
+        cfg._user_explicit_request_pads = set()
+        self.assertEqual(cfg.traverse_bins, {"user_bin"})
+
     def test_user_empty_falls_back_to_default(self):
         cfg = PipelineParserConfig.__new__(PipelineParserConfig)
         cfg._merge = True
@@ -374,9 +398,21 @@ class ExplicitRequestPadsTestCase(unittest.TestCase):
         result = cfg.resolve_filters("compositor")
         self.assertNotIn("name", result.element_properties)
 
-    def test_user_explicit_overrides_default(self):
+    def test_user_explicit_merges_with_default(self):
         cfg = PipelineParserConfig.__new__(PipelineParserConfig)
         cfg._merge = True
+        cfg._merge_policy = PipelineParserConfig.MERGE_POLICY_SPECIFICITY
+        cfg._defaults_classified = _classify_entries({})
+        cfg._default_traverse_bins = set()
+        cfg._default_explicit_request_pads = {"tee"}
+        cfg._user_classified = None
+        cfg._user_traverse_bins = set()
+        cfg._user_explicit_request_pads = {"compositor", "funnel"}
+        self.assertEqual(cfg.explicit_request_pads, {"tee", "compositor", "funnel"})
+
+    def test_user_explicit_overrides_default_no_merge(self):
+        cfg = PipelineParserConfig.__new__(PipelineParserConfig)
+        cfg._merge = False
         cfg._merge_policy = PipelineParserConfig.MERGE_POLICY_SPECIFICITY
         cfg._defaults_classified = _classify_entries({})
         cfg._default_traverse_bins = set()
