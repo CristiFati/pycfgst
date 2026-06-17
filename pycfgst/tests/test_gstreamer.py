@@ -69,6 +69,9 @@ class _GStreamerTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        os.environ["GST_DEBUG"] = (
+            "2,v4l2:1,qtdemux:1,basesrc:1,v4l2videodec:1,vadisplay:1,v4l2bufferpool:1"
+        )
         Gst.init(argv=None)
 
         from pycfgst.pipeline_parser import PipelineParser
@@ -83,6 +86,12 @@ class _GStreamerTestCase(unittest.TestCase):
         pipeline = Gst.parse_launch(command)
         self.assertIsNotNone(pipeline)
         pipeline.set_state(Gst.State.NULL)
+
+    def factory_has_property(self, factory, property_):
+        elem = Gst.ElementFactory.make(factory)
+        if elem is None:
+            return False
+        return elem.find_property(property_) is not None
 
     def split_output_string(self, output):
         outls = output.split("\n")
@@ -248,9 +257,9 @@ class PipelineParserBinTestCase(_GStreamerTestCase):
         pipeline.set_state(Gst.State.PAUSED)
         pparser = self.PipelineParser()
         pstr = pparser.gst_launch(pipeline)
-        self.assertValidGstLaunch(pstr)
-        # self.save_dot(pipeline, f"test_one_bin_{ts_str()}.dot")
         # print(f"Output: {pstr}")
+        # self.save_dot(pipeline, f"test_one_bin_{ts_str()}.dot")
+        self.assertValidGstLaunch(pstr)
         self.assertTrue(self.compare_pipeline_strings(pipeline_str, pstr))
         pipeline.set_state(Gst.State.NULL)
 
@@ -261,15 +270,29 @@ class PipelineParserBinTestCase(_GStreamerTestCase):
         pipeline.set_state(Gst.State.PAUSED)
         pparser = self.PipelineParser()
         pstr = pparser.gst_launch(pipeline)
-        self.assertValidGstLaunch(pstr)
-        # self.save_dot(pipeline, f"test_playbin_{ts_str()}.dot")
         # print(f"Output: {pstr}")
+        # self.save_dot(pipeline, f"test_playbin_{ts_str()}.dot")
+        self.assertValidGstLaunch(pstr)
         self.assertTrue(self.split_output_string(pstr)[0].startswith("playbin"))
         pipeline.set_state(Gst.State.NULL)
 
 
 @unittest.skipUnless(HAS_NVDS, "NVidia DeepStream not available")
 class PipelineParserNVidiaTestCase(_GStreamerTestCase):
+
+    _vttest_lib = os.path.join(
+        os.path.dirname(__file__),
+        "data",
+        "nvdsvideotemplate",
+        "testlib0",
+        "libvttest0.so",
+    )
+    _vttest_lib_props = {
+        "prop0": "val0",
+        "prop1": "val1",
+        "prop2": "val2",
+    }
+    _vttest_lib_sep = ";;;"
 
     def test_nvvideoconvert(self):
         pipeline_str = "videotestsrc pattern=18 ! nvvideoconvert ! fakevideosink"
@@ -278,15 +301,15 @@ class PipelineParserNVidiaTestCase(_GStreamerTestCase):
         pipeline.set_state(Gst.State.PAUSED)
         pparser = self.PipelineParser()
         pstr = pparser.gst_launch(pipeline)
-        self.assertValidGstLaunch(pstr)
         # print(f"Output: {pstr}")
+        self.assertValidGstLaunch(pstr)
         self.assertTrue(self.compare_pipeline_strings(pipeline_str, pstr))
         pipeline.set_state(Gst.State.NULL)
 
     @unittest.skipUnless(os.path.isfile(SAMPLE_VIDEO), "sample video not available")
     def test_nvv4ldecoder(self):
         pipeline_str = (
-            f"filesrc location={SAMPLE_VIDEO} ! qtdemux ! h264parse"
+            f'filesrc location="{SAMPLE_VIDEO}" ! qtdemux ! h264parse'
             " ! nvv4l2decoder ! nvvideoconvert ! fakevideosink"
         )
         pipeline = Gst.parse_launch(pipeline_str)
@@ -294,7 +317,69 @@ class PipelineParserNVidiaTestCase(_GStreamerTestCase):
         pipeline.set_state(Gst.State.PAUSED)
         pparser = self.PipelineParser()
         pstr = pparser.gst_launch(pipeline)
-        self.assertValidGstLaunch(pstr)
         # print(f"Output: {pstr}")
+        self.assertValidGstLaunch(pstr)
         self.assertTrue(self.compare_pipeline_strings(pipeline_str, pstr))
         pipeline.set_state(Gst.State.NULL)
+
+    def _test_videotemplate(self, pipeline_str):
+        pipeline = Gst.parse_launch(pipeline_str)
+        self.assertIsNotNone(pipeline)
+        ret = pipeline.set_state(Gst.State.PLAYING)
+        self.assertNotEqual(ret, Gst.StateChangeReturn.FAILURE)
+        bus = pipeline.get_bus()
+        msg = bus.timed_pop_filtered(
+            5 * Gst.SECOND, Gst.MessageType.EOS | Gst.MessageType.ERROR
+        )
+        self.assertIsNotNone(msg)
+        self.assertEqual(msg.type, Gst.MessageType.EOS)
+        pparser = self.PipelineParser()
+        pstr = pparser.gst_launch(pipeline)
+        # print(f"Output: {pstr}")
+        self.assertValidGstLaunch(pstr)
+        self.assertEqual(pstr.count("customlib-props="), 1)
+        pipeline.set_state(Gst.State.NULL)
+        return pstr
+
+    def _customlib_props_str(self, props):
+        return " ".join(f'customlib-props="{k}:{v}"' for k, v in props.items())
+
+    @unittest.skipUnless(os.path.isfile(_vttest_lib), "libvttest0.so not built")
+    def test_videotemplate_original_joined(self):
+        props_str = self._vttest_lib_sep.join(
+            f"{k}:{v}" for k, v in self._vttest_lib_props.items()
+        )
+        prop_sep_str = f' customlib-props-sep="{self._vttest_lib_sep}"'
+        pipeline_str = (
+            "videotestsrc pattern=18 num-buffers=1"
+            " ! nvvideoconvert"
+            f' ! nvdsvideotemplate customlib-name="{self._vttest_lib}"'
+        )
+        has_sep = self.factory_has_property("nvdsvideotemplate", "customlib-props-sep")
+        if has_sep:
+            pipeline_str += prop_sep_str
+        pipeline_str += f' customlib-props="{props_str}"'
+        pipeline_str += " ! fakevideosink"
+        # print(pipeline_str)
+        print(
+            f"videotemplate {'DOES' if has_sep else 'does NOT'} support customlib-props-sep,"
+            f" {len(self._vttest_lib_props) if has_sep else 1} line(s) from custom library should be displayed"
+        )
+        pstr = self._test_videotemplate(pipeline_str)
+        k0 = tuple(self._vttest_lib_props.keys())[0]
+        self.assertTrue(f"{k0}:{self._vttest_lib_props[k0]}" in pstr)
+        self.assertTrue(props_str in pstr)
+
+    @unittest.skipUnless(os.path.isfile(_vttest_lib), "libvttest0.so not built")
+    def test_videotemplate_original_separate(self):
+        pipeline_str = (
+            "videotestsrc pattern=18 num-buffers=1"
+            " ! nvvideoconvert"
+            f' ! nvdsvideotemplate customlib-name="{self._vttest_lib}"'
+            f" {self._customlib_props_str(self._vttest_lib_props)}"
+            " ! fakevideosink"
+        )
+        # print(pipeline_str)
+        pstr = self._test_videotemplate(pipeline_str)
+        k0 = tuple(self._vttest_lib_props.keys())[0]
+        self.assertFalse(f"{k0}:{self._vttest_lib_props[k0]}" in pstr)
