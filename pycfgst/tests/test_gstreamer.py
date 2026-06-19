@@ -70,7 +70,8 @@ class _GStreamerTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         os.environ["GST_DEBUG"] = (
-            "2,v4l2:1,qtdemux:1,basesrc:1,v4l2videodec:1,vadisplay:1,v4l2bufferpool:1"
+            "2,v4l2:1,qtdemux:1,basesrc:1,v4l2videodec:1"
+            ",vadisplay:1,v4l2bufferpool:1,uridecodebin:1"
         )
         Gst.init(argv=None)
 
@@ -80,9 +81,11 @@ class _GStreamerTestCase(unittest.TestCase):
         cls.RegistryAccess = RegistryAccess
         cls.PipelineParser = PipelineParser
 
-    def assertValidGstLaunch(self, output):
-        command = " ! ".join(self.split_output_string(output)).replace("'", "")
+    def assertValidGstLaunch(self, output, quote_replace=""):
         # print("----- output\n", output)
+        command = " ! ".join(self.split_output_string(output)).replace(
+            "'", quote_replace
+        )
         pipeline = Gst.parse_launch(command)
         self.assertIsNotNone(pipeline)
         pipeline.set_state(Gst.State.NULL)
@@ -289,8 +292,8 @@ class PipelineParserNVidiaTestCase(_GStreamerTestCase):
     )
     _vttest_lib_props = {
         "prop0": "val0",
-        "prop1": "val1",
-        "prop2": "val2",
+        "prop1": "val1[{]},<.>/?|;:",
+        "prop2": "val 2 ",
     }
     _vttest_lib_sep = ";;;"
 
@@ -336,7 +339,7 @@ class PipelineParserNVidiaTestCase(_GStreamerTestCase):
         pparser = self.PipelineParser()
         pstr = pparser.gst_launch(pipeline)
         # print(f"Output: {pstr}")
-        self.assertValidGstLaunch(pstr)
+        self.assertValidGstLaunch(pstr, quote_replace='"')
         self.assertEqual(pstr.count("customlib-props="), 1)
         pipeline.set_state(Gst.State.NULL)
         return pstr
