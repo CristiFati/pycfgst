@@ -23,6 +23,25 @@ GStreamer and its plugins must be installed separately (system packages or platf
 
 ## Usage
 
+### Registry Access
+
+Inspect the GStreamer plugin registry:
+
+```python
+import gi
+gi.require_version("Gst", "1.0")
+from gi.repository import Gst
+
+Gst.init(None)
+
+from pycfgst.registry_access import RegistryAccess
+
+ra = RegistryAccess()
+print(f"Plugins: {len(ra.contents())}")
+print(f"Element classes: {len(ra.element_classes())}")
+print(f"Failed: {ra.failed_classes}")
+```
+
 ### Pipeline Parser
 
 Convert a live GStreamer pipeline into a `gst-launch-1.0` command string:
@@ -63,25 +82,6 @@ gst-launch-1.0 -e \
   t0. \
     ! queue \
     ! autovideosink
-```
-
-### Registry Access
-
-Inspect the GStreamer plugin registry:
-
-```python
-import gi
-gi.require_version("Gst", "1.0")
-from gi.repository import Gst
-
-Gst.init(None)
-
-from pycfgst.registry_access import RegistryAccess
-
-ra = RegistryAccess()
-print(f"Plugins: {len(ra.contents())}")
-print(f"Element classes: {len(ra.element_classes())}")
-print(f"Failed: {ra.failed_classes}")
 ```
 
 ## Property Filtering
@@ -133,7 +133,7 @@ Each pattern maps to a list of property items:
 | Syntax | Meaning |
 |--------|---------|
 | `propname` | Exclude this property |
-| `!propname` | Re-include this property (undo a previous exclusion) |
+| `!propname` | Re-include this property (undo a previous exclusion; repeated negations are no-ops, not toggles) |
 | `*` | Exclude all properties |
 | `@pad` | Nested list of pad-specific property rules (same syntax) |
 
@@ -296,6 +296,10 @@ customlib-props=property2:value2
 ```
 
 The first two properties are silently lost.
+
+## Notes
+
+- Parts of code assisted by [Claude Code](https://claude.ai/code)
 
 ## Changelog
 

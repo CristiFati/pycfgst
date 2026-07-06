@@ -4,9 +4,9 @@
 from __future__ import annotations
 
 import sys
-from pprint import pprint
 
 from pycfutils.exceptions import ModuleException
+from pycfutils.miscellaneous import pretty_print as pprint
 
 try:
     import gi
@@ -118,9 +118,7 @@ if __name__ == "__main__":
     )
     Gst.init(argv=None)
     ra = RegistryAccess()
-    print("\nGst registry contents:")
     contents = ra.contents()
-    pprint(contents, sort_dicts=False)
-    print("\nGst registry features (with classes):")
-    pprint(ra.element_classes_dict())
+    pprint(contents, head="\nGst registry contents:", sort_dicts=False)
+    pprint(ra.element_classes_dict(), head="\nGst registry features (with classes):")
     print("\nDone.\n")

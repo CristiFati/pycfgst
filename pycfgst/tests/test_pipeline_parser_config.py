@@ -188,6 +188,18 @@ class ResolveDefaultsOnlyTestCase(unittest.TestCase):
         self.assertNotIn("direction", result.pad_properties)
         self.assertIn("caps", result.pad_properties)
 
+    def test_redundant_negation_across_tiers(self):
+        """!name at glob and exact tiers — second negation is a no-op."""
+        r = self._config_from_properties(
+            {
+                "*": ["name"],
+                "te*": ["!name"],
+                "tee": ["!name"],
+            }
+        )
+        result = r.resolve_filters("tee")
+        self.assertNotIn("name", result.element_properties)
+
     def test_multiple_globs_order(self):
         r = self._config_from_properties(
             {

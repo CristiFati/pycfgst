@@ -194,7 +194,7 @@ class PipelineParserGstLaunchTestCase(_GStreamerTestCase):
 
     def test_gst_launch_pipelines(self):
         pparser = self.PipelineParser()
-        pipeline_strings = tuple(self.read_pipelines()[2:-2])
+        pipeline_strings = tuple(self.read_pipelines())
         for pipeline_string in pipeline_strings:
             pipeline = self.generate_pipeline(pipeline_string)
             self.assertIsNotNone(pipeline)

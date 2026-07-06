@@ -16,8 +16,8 @@ import yaml
 
 ALL_MARKER = "*"
 NEGATION_PREFIX = "!"
-PAD_PREFIX = "@"
-PAD_KEY = f"{PAD_PREFIX}pad"
+SPECIAL_PREFIX = "@"
+PAD_KEY = f"{SPECIAL_PREFIX}pad"
 
 _GLOB_CHARS = frozenset("*?[]")
 
